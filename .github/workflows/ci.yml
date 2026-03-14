@@ -1,0 +1,98 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run setup.sh (CI mode)
+        env:
+          CI: true
+        run: bash setup.sh
+
+      - name: Verify deployed files exist
+        run: |
+          echo "Checking deployed file locations..."
+          test -f ~/claude-migration/telegram-bridge.py      && echo "✓ bridge/telegram-bridge.py" || (echo "✗ bridge missing" && exit 1)
+          test -f ~/claude-agents/workshop/workshop-server.js && echo "✓ dashboard/workshop-server.js" || (echo "✗ dashboard missing" && exit 1)
+          test -f ~/claude-migration/memory-mcp/package.json  && echo "✓ memory-mcp/package.json" || (echo "✗ memory-mcp missing" && exit 1)
+          test -f ~/claude-agents/main/CLAUDE.md              && echo "✓ commandant CLAUDE.md" || (echo "✗ commandant CLAUDE.md missing" && exit 1)
+          test -f ~/.claude/.mcp.json                         && echo "✓ .mcp.json generated" || (echo "✗ .mcp.json missing" && exit 1)
+          test -f ~/.workshop/jobs.json                       && echo "✓ jobs.json initialized" || (echo "✗ jobs.json missing" && exit 1)
+
+      - name: Syntax checks
+        run: |
+          echo "Shell syntax..."
+          bash -n setup.sh && echo "✓ setup.sh"
+
+          echo "Python syntax..."
+          python3 -m py_compile ~/claude-migration/telegram-bridge.py && echo "✓ telegram-bridge.py"
+
+          echo "Node syntax..."
+          node --check ~/claude-agents/workshop/workshop-server.js && echo "✓ workshop-server.js"
+          node --check ~/claude-migration/memory-mcp/server.mjs    && echo "✓ server.mjs"
+          node --check ~/claude-migration/memory-mcp/indexer.mjs   && echo "✓ indexer.mjs"
+
+      - name: JSON validation
+        run: |
+          python3 -m json.tool bridge/bots.json.example      > /dev/null && echo "✓ bots.json.example"
+          python3 -m json.tool memory-mcp/package.json        > /dev/null && echo "✓ package.json"
+          python3 -m json.tool memory-mcp/.mcp.json.example   > /dev/null && echo "✓ .mcp.json.example"
+
+      - name: npm install (memory-mcp)
+        run: |
+          cd ~/claude-migration/memory-mcp
+          npm install 2>&1
+          echo "✓ npm install complete"
+
+      - name: Indexer schema smoke test
+        run: |
+          mkdir -p /tmp/obs-ci/claude-agents/testagent/memory
+          mkdir -p /tmp/obs-ci/workshop-memory
+          echo "# Test Memory
+
+          This is a test memory chunk for CI validation. The indexer should create a chunks table, an FTS virtual table, and insert this content as at least one chunk." \
+            > /tmp/obs-ci/claude-agents/testagent/memory/2026-01-01.md
+
+          WORKSHOP_AGENTS_DIR=/tmp/obs-ci/claude-agents \
+          MEMORY_DIR=/tmp/obs-ci/workshop-memory \
+          OLLAMA_URL=http://localhost:1 \
+          node ~/claude-migration/memory-mcp/indexer.mjs testagent || true
+
+          COUNT=$(sqlite3 /tmp/obs-ci/workshop-memory/testagent.sqlite "SELECT COUNT(*) FROM chunks;" 2>/dev/null || echo 0)
+          echo "Chunks inserted: $COUNT"
+          [ "$COUNT" -gt 0 ] || (echo "FAIL: No chunks inserted into DB" && exit 1)
+          echo "✓ Indexer schema and insert verified"
+
+      - name: MCP SDK import check
+        run: |
+          cd ~/claude-migration/memory-mcp
+          timeout 5 node --input-type=module --eval "
+            import('@modelcontextprotocol/sdk/server/mcp.js').then(() => {
+              console.log('✓ MCP SDK import OK');
+              process.exit(0);
+            }).catch(e => {
+              console.error('FAIL: MCP SDK import error:', e.message);
+              process.exit(1);
+            });
+          "

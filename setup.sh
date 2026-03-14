@@ -23,6 +23,8 @@ info() { echo -e "  ${CYAN}→${RESET} $1"; }
 warn() { echo -e "  ${YELLOW}!${RESET} $1"; }
 section() { echo -e "\n${BOLD}$1${RESET}"; echo "────────────────────────────────────────"; }
 
+IS_CI="${CI:-false}"
+
 echo ""
 echo "🔭 Observatory Workshop — Setup"
 echo "================================"
@@ -71,6 +73,8 @@ fi
 # Claude CLI
 if command -v claude &>/dev/null; then
     ok "claude $(claude --version 2>&1 | head -1)"
+elif [ "$IS_CI" = "true" ]; then
+    warn "claude CLI not found — skipping in CI (install with: npm install -g @anthropic-ai/claude-code)"
 else
     fail "claude CLI not found"
     info "Install with: npm install -g @anthropic-ai/claude-code"
@@ -80,6 +84,8 @@ fi
 # Ollama
 if command -v ollama &>/dev/null; then
     ok "ollama $(ollama --version 2>&1 | head -1)"
+elif [ "$IS_CI" = "true" ]; then
+    warn "ollama not found — skipping in CI (install with: brew install ollama)"
 else
     fail "ollama not found"
     info "Install with: brew install ollama"
@@ -227,23 +233,28 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 6: Pull Ollama embedding model
 # ─────────────────────────────────────────────────────────────────────────────
-section "Step 6: Pulling Ollama embedding model"
+if [ "$IS_CI" = "true" ]; then
+    section "Step 6: Pulling Ollama embedding model"
+    warn "CI mode — skipping Ollama model pull (run 'ollama pull nomic-embed-text' after install)"
+else
+    section "Step 6: Pulling Ollama embedding model"
 
-section "Starting Ollama daemon"
-if ! ollama list &>/dev/null; then
-  info "Starting Ollama in background..."
-  ollama serve &>/dev/null &
-  sleep 3
-  if ! ollama list &>/dev/null; then
-    warn "Ollama daemon didn't start. Try running 'ollama serve' in a separate terminal, then re-run this script."
-    exit 1
-  fi
+    section "Starting Ollama daemon"
+    if ! ollama list &>/dev/null; then
+      info "Starting Ollama in background..."
+      ollama serve &>/dev/null &
+      sleep 3
+      if ! ollama list &>/dev/null; then
+        warn "Ollama daemon didn't start. Try running 'ollama serve' in a separate terminal, then re-run this script."
+        exit 1
+      fi
+    fi
+    ok "Ollama daemon running"
+
+    info "Downloading nomic-embed-text (~300MB) — this may take a minute..."
+    ollama pull nomic-embed-text
+    ok "nomic-embed-text ready"
 fi
-ok "Ollama daemon running"
-
-info "Downloading embeddinggemma:300m (~300MB) — this may take a minute..."
-ollama pull embeddinggemma:300m
-ok "embeddinggemma:300m ready"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 7: Initialize empty memory databases
@@ -262,13 +273,19 @@ section "Step 8: Locating sqlite-vec dylib"
 
 VEC_DYLIB=""
 
-# Search common install locations
+# Search common install locations (both Apple Silicon arm64 and Intel x64)
 VEC_DYLIB=$(find /opt/homebrew -name "vec0.dylib" 2>/dev/null | head -1)
 if [ -z "$VEC_DYLIB" ]; then
-    VEC_DYLIB=$(find ~/.npm -name "vec0.dylib" 2>/dev/null | head -1)
+    VEC_DYLIB=$(find ~/.npm -path "*/sqlite-vec-darwin-arm64/*" -name "vec0.dylib" 2>/dev/null | head -1)
 fi
 if [ -z "$VEC_DYLIB" ]; then
-    VEC_DYLIB=$(find ~/node_modules -name "vec0.dylib" 2>/dev/null | head -1)
+    VEC_DYLIB=$(find ~/.npm -path "*/sqlite-vec-darwin-x64/*" -name "vec0.dylib" 2>/dev/null | head -1)
+fi
+if [ -z "$VEC_DYLIB" ]; then
+    VEC_DYLIB=$(find ~/node_modules -path "*/sqlite-vec-darwin-arm64/*" -name "vec0.dylib" 2>/dev/null | head -1)
+fi
+if [ -z "$VEC_DYLIB" ]; then
+    VEC_DYLIB=$(find ~/node_modules -path "*/sqlite-vec-darwin-x64/*" -name "vec0.dylib" 2>/dev/null | head -1)
 fi
 
 if [ -n "$VEC_DYLIB" ]; then
@@ -276,7 +293,8 @@ if [ -n "$VEC_DYLIB" ]; then
     info "Set VEC_DYLIB=\"$VEC_DYLIB\" in your .mcp.json env block"
 else
     warn "vec0.dylib not found in common locations"
-    info "Install it with: npm install -g sqlite-vec-darwin-arm64"
+    info "Apple Silicon: npm install -g sqlite-vec-darwin-arm64"
+    info "Intel Mac:     npm install -g sqlite-vec-darwin-x64"
     info "Then re-run this script, or set VEC_DYLIB manually in .mcp.json"
 fi
 
@@ -301,7 +319,7 @@ else
         "MEMORY_DIR": "$HOME/.workshop/memory",
         "VEC_DYLIB": "${VEC_DYLIB:-REPLACE_WITH_PATH_TO_vec0.dylib}",
         "OLLAMA_URL": "http://localhost:11434/v1/embeddings",
-        "EMBED_MODEL": "embeddinggemma:300m"
+        "EMBED_MODEL": "nomic-embed-text"
       }
     }
   }
@@ -339,10 +357,15 @@ cat <<'NEXTSTEPS'
    → Fill in your personal preferences
 
 5. CONFIGURE MEMORY MCP
-   → Copy memory-mcp/.mcp.json.example to ~/.claude/.mcp.json (or merge with existing)
-   → Set VEC_DYLIB path (found above in Step 8)
+   → MCP config was written to ~/.claude/.mcp.json by setup.sh. If VEC_DYLIB was found, you're done.
+   → If not, edit that file and set MEMORY_VEC_DYLIB manually.
 
-6. START THE WORKSHOP
+6. INDEX YOUR MEMORY FILES
+   → After writing memory notes, run: node ~/claude-migration/memory-mcp/indexer.mjs main
+   → Re-run whenever you want search to reflect new memory
+   → Optional nightly cron: 0 2 * * * node ~/claude-migration/memory-mcp/indexer.mjs main
+
+7. START THE WORKSHOP
    → Terminal 1: python3 ~/claude-migration/telegram-bridge.py
    → Terminal 2: node ~/claude-agents/workshop/workshop-server.js
    → Dashboard: http://localhost:3500
@@ -351,7 +374,7 @@ cat <<'NEXTSTEPS'
     to auto-start everything on login — edit the .plist.template files, then:
     cp *.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/<name>.plist)
 
-7. SEND YOUR FIRST MESSAGE
+8. SEND YOUR FIRST MESSAGE
    → Open Telegram, find your bot
    → Send: "Hello! Read your CLAUDE.md and introduce yourself."
 
