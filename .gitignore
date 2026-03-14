@@ -1,0 +1,11 @@
+node_modules/
+*.sqlite
+*.token
+.env
+bots.json
+.mcp.json
+*.log
+*.pid
+__pycache__/
+*.pyc
+.DS_Store

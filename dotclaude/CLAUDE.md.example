@@ -1,0 +1,116 @@
+# Global User Preferences
+# Copy this file to ~/.claude/CLAUDE.md and fill in your details.
+# This file is loaded automatically by Claude CLI for every agent session.
+
+## User
+
+- **Name:** [YOUR_NAME]
+- **Pronouns:** [YOUR_PRONOUNS — e.g., he/him, she/her, they/them]
+- **Timezone:** [YOUR_TIMEZONE — e.g., America/Los_Angeles, Asia/Kolkata, Europe/London]
+
+## Context
+
+- [Describe your background and how you work — e.g., "Builder. Prefers practical action over discussion."]
+- [What do you value? Speed? Rigor? Elegance? Cost efficiency?]
+- [How much autonomy do you give agents? "Trusts agents to decide" vs "wants to approve each step"]
+- [Any strong preferences about technology stack, language, approach?]
+
+## Communication Style
+
+- [How do you like to receive information? Lead with results? Lead with options?]
+- [What's your signal for "yes, proceed"? — e.g., "sounds good" or explicit approval]
+- [What annoys you? e.g., "don't ask permission for internal work"]
+- [Energy level — casual? formal? direct?]
+- [What does follow-through look like to you?]
+
+---
+
+## Core Working Principles
+
+### 1. Verify Everything
+Never assume an action worked. After any operation:
+- Check the result explicitly
+- If deploying: verify at the URL
+- If writing code: test it
+- If using a sub-agent: verify their output
+
+### 2. Delegate Focused Work
+Use the Agent tool to spawn sub-agents for specific, self-contained tasks:
+- Give clear objectives with success criteria
+- Provide relevant file paths and context
+- Specify constraints (what NOT to change)
+- Use `model: haiku` for mechanical tasks, `model: sonnet` for moderate complexity
+
+### 3. Surgical Code Changes
+When editing code:
+- Touch only what's needed for the task
+- Don't "improve" adjacent code
+- Match existing style exactly
+- Remove only orphans YOUR changes created
+
+### 4. Define Success Criteria
+Every task should have clear success criteria:
+- Screenshot showing specific UI state
+- Test passing
+- URL returning expected response
+- Specific text appearing in output
+
+---
+
+## Standard Workflow
+
+1. **Understand the task** — What exactly needs to happen?
+2. **Define success criteria** — How will we know it's done?
+3. **Break into sub-tasks** — Can any be delegated to sub-agents?
+4. **Execute** — Do the work or spawn helpers
+5. **Verify** — Check that success criteria are met
+6. **Report** — Summarize what was done and evidence of completion
+
+---
+
+## Verification Checklist
+
+Before reporting task complete:
+- [ ] Code compiles/runs without errors
+- [ ] Manual test confirms functionality
+- [ ] No unintended side effects observed
+- [ ] Changes match the request (no scope creep)
+- [ ] Evidence collected (screenshot, output, test result)
+
+---
+
+## Sacred Files (Config Lock Policy)
+
+**List files that agents must NEVER read, edit, write, deploy, or delete.**
+
+Examples:
+- `config.php` files containing credentials
+- `.env` files on servers
+- `~/.claude/settings.json` and `settings.local.json`
+- Any file containing API keys or production secrets
+
+[FILL IN YOUR PROTECTED FILES HERE]
+
+If an agent needs a new constant or config value, they should document it in a manifest file and ask you to add it manually.
+
+---
+
+## Credential Locations
+
+All service credentials live at [YOUR SECRETS DIRECTORY — e.g., `~/.observatory/secrets/`]:
+
+| File | Service | Used By |
+|------|---------|---------|
+| [FILL IN] | [SERVICE] | [AGENT(S)] |
+| [FILL IN] | [SERVICE] | [AGENT(S)] |
+
+Environment variables referenced in agent CLAUDE.md files:
+- [FILL IN any env vars agents should know about, without values]
+
+---
+
+## Agent Directory
+
+Agent projects live at `~/claude-agents/<name>/`. Each has its own CLAUDE.md and memory/ directory. Your commandant workspace is at `~/claude-agents/[YOUR_COMMANDANT_NAME]/`.
+
+[Adjust this path if your agents live somewhere else.]

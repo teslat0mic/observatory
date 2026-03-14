@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.workshop.dashboard</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>YOUR_HOME_DIR/claude-agents/workshop-starter/dashboard/workshop-server.js</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>YOUR_HOME_DIR/claude-agents/workshop-starter/dashboard</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>YOUR_HOME_DIR/.claude/logs/workshop-server.log</string>
+    <key>StandardErrorPath</key>
+    <string>YOUR_HOME_DIR/.claude/logs/workshop-server.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <!-- Optional: override defaults -->
+        <!-- <key>WORKSHOP_AGENTS_DIR</key> -->
+        <!-- <string>YOUR_HOME_DIR/claude-agents</string> -->
+        <!-- <key>BRIDGE_URL</key> -->
+        <!-- <string>http://127.0.0.1:3460</string> -->
+        <!-- <key>WORKSHOP_DASHBOARD_PORT</key> -->
+        <!-- <string>3500</string> -->
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workshop</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0a;
+  --bg-card: #141414;
+  --bg-hover: #1a1a1a;
+  --bg-input: #111;
+  --border: #222;
+  --border-focus: #444;
+  --text: #ccc;
+  --text-dim: #666;
+  --text-bright: #eee;
+  --accent: #c4956a;
+  --accent-dim: #8a6a4a;
+  --green: #4a7;
+  --red: #c55;
+  --blue: #68b;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+
+/* Layout */
+.app { display: flex; height: 100vh; }
+
+/* Sidebar */
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.sidebar-search {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-search input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.sidebar-search input:focus { border-color: var(--border-focus); }
+.sidebar-search input::placeholder { color: var(--text-dim); }
+
+.agent-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+/* Agent groups */
+.agent-group { border-bottom: 1px solid var(--border); }
+.agent-group:last-child { border-bottom: none; }
+.agent-group-header {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  user-select: none;
+  transition: color 0.15s;
+}
+.agent-group-header:hover { color: var(--text); }
+.agent-group-header .toggle {
+  font-size: 9px;
+  transition: transform 0.15s;
+  width: 10px;
+  text-align: center;
+}
+.agent-group.collapsed .toggle { transform: rotate(-90deg); }
+.agent-group-header .group-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.agent-group-items {
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+  max-height: 500px;
+}
+.agent-group.collapsed .agent-group-items { max-height: 0; }
+
+.agent-item {
+  padding: 6px 16px 6px 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.agent-item:hover { background: var(--bg-hover); }
+.agent-item.active { background: var(--bg-hover); color: var(--accent); }
+.agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.agent-dot.offline { background: var(--text-dim); }
+.agent-dot.dashboard-only { background: var(--blue); }
+.agent-name { flex: 1; }
+.agent-badge {
+  background: var(--accent-dim);
+  color: var(--text-bright);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+.agent-last-active {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* Services section */
+.services-section {
+  border-top: 1px solid var(--border);
+  padding: 4px 0 8px;
+}
+.services-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.service-item {
+  padding: 6px 16px 6px 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.service-item:hover { background: var(--bg-hover); }
+.service-item.active { background: var(--bg-hover); color: var(--accent); }
+.service-icon {
+  font-size: 11px;
+  width: 14px;
+  text-align: center;
+  color: var(--accent-dim);
+  flex-shrink: 0;
+}
+.service-item:hover .service-icon { color: var(--accent); }
+
+/* Main area */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.status-dot.error { background: var(--red); }
+.bridge-restart-btn {
+  margin-left: auto;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bridge-restart-btn:hover { color: var(--text); border-color: var(--border-focus); }
+.bridge-restart-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Chat */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chat-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  position: relative;
+}
+.chat-msg.user {
+  align-self: flex-end;
+  background: #1a2a1a;
+  border: 1px solid #2a3a2a;
+}
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.chat-msg .source-badge {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.chat-msg.assistant .source-badge { left: 8px; right: auto; }
+.chat-msg .msg-text { white-space: pre-wrap; }
+.chat-msg .msg-text code {
+  background: #1a1a1a;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+}
+.chat-msg .msg-text pre {
+  background: #0d0d0d;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+}
+.chat-msg .msg-text pre code {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+}
+.chat-msg .msg-text a { color: var(--accent); }
+.chat-msg .msg-text strong { color: var(--text-bright); }
+.chat-msg .msg-ts {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  opacity: 0.7;
+}
+.chat-msg.user .msg-ts { text-align: right; }
+.chat-msg.assistant .msg-ts { text-align: left; }
+
+.typing-indicator {
+  align-self: flex-start;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-style: italic;
+  display: none;
+}
+.typing-indicator.visible { display: block; }
+
+.chat-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  background: var(--bg);
+}
+.chat-input-area textarea {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  min-height: 42px;
+  max-height: 120px;
+}
+.chat-input-area textarea:focus { border-color: var(--border-focus); }
+.chat-input-area textarea::placeholder { color: var(--text-dim); }
+.send-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-end;
+  height: 42px;
+  transition: opacity 0.15s;
+}
+.send-btn:hover { opacity: 0.9; }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Files */
+.files-panel {
+  flex: 1;
+  display: none;
+  min-height: 0;
+}
+.files-panel.active { display: flex; }
+/* Chat panel: active = flex, inactive = none */
+.chat-panel { display: none; }
+.chat-panel.active { display: flex; }
+
+.file-tree {
+  width: 260px;
+  min-width: 260px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.file-item {
+  padding: 5px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.1s;
+}
+.file-item:hover { background: var(--bg-hover); }
+.file-item.active { background: var(--bg-hover); color: var(--accent); }
+.file-item.claude-md { color: var(--accent); font-weight: 600; }
+
+.file-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.file-editor-header {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.file-editor-header .file-path {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.file-editor-header .unsaved { color: var(--accent); margin-left: 8px; }
+.save-btn {
+  background: var(--accent-dim);
+  color: var(--text-bright);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  display: none;
+}
+.save-btn.visible { display: inline-block; }
+.file-editor textarea {
+  flex: 1;
+  background: var(--bg);
+  border: none;
+  padding: 16px;
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  tab-size: 2;
+}
+.file-editor .empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* Iframe panel for embedded services */
+.iframe-panel {
+  flex: 1;
+  display: none;
+  min-height: 0;
+}
+.iframe-panel.active { display: flex; }
+.iframe-panel iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: var(--bg);
+}
+
+/* Mobile menu toggle */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* Sidebar overlay backdrop */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 99;
+}
+.sidebar-backdrop.visible { display: block; }
+
+/* --- Mobile (< 768px) --- */
+@media (max-width: 767px) {
+  .menu-toggle { display: block; }
+
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    z-index: 100;
+    width: 260px;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: none;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+  }
+
+  .main { width: 100%; }
+
+  /* Larger touch targets */
+  .agent-item { padding: 10px 16px 10px 28px; }
+  .service-item { padding: 10px 16px 10px 28px; }
+  .agent-group-header { padding: 10px 12px; }
+  .tab { padding: 12px 16px; }
+
+  /* Full-width messages */
+  .chat-msg { max-width: 95%; }
+
+  /* Chat input area */
+  .chat-input-area { padding: 8px 10px; }
+  .chat-input-area textarea { font-size: 16px; /* prevents iOS zoom */ }
+  .send-btn { padding: 0 12px; }
+
+  /* Files panel: stack vertically on mobile */
+  .files-panel.active { flex-direction: column; }
+  .file-tree {
+    width: 100%;
+    min-width: 0;
+    max-height: 35vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Status bar wrap */
+  .status-bar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
+}
+
+/* --- Small phones (< 400px) --- */
+@media (max-width: 399px) {
+  .sidebar { width: 85vw; }
+  .chat-messages { padding: 10px 8px; }
+  .chat-msg { max-width: 98%; font-size: 13px; }
+  .chat-msg .msg-text pre { font-size: 11px; padding: 8px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Mobile sidebar backdrop -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">Workshop</div>
+    <div class="sidebar-search">
+      <input type="text" id="agentSearch" placeholder="Filter agents...">
+    </div>
+    <div class="agent-list" id="agentList"></div>
+    <div class="services-section" id="servicesSection"></div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="tab-bar" id="tabBar">
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <div class="tab active" data-tab="chat">Chat</div>
+      <div class="tab" data-tab="files">Files</div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="bridgeDot"></div>
+      <span id="bridgeStatus">Connecting...</span>
+      <span id="queueInfo"></span>
+      <button class="bridge-restart-btn" id="restartBridgeBtn" title="Restart bridge">⟳ Restart</button>
+    </div>
+
+    <!-- Chat Tab -->
+    <div class="chat-panel active" id="chatPanel">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="typing-indicator" id="typingIndicator">Thinking...</div>
+      <div class="chat-input-area">
+        <textarea id="chatInput" placeholder="Send a message..." rows="1"></textarea>
+        <button class="send-btn" id="sendBtn">Send</button>
+      </div>
+    </div>
+
+    <!-- Files Tab -->
+    <div class="files-panel" id="filesPanel">
+      <div class="file-tree" id="fileTree"></div>
+      <div class="file-editor">
+        <div class="file-editor-header">
+          <span>
+            <span class="file-path" id="filePath">No file selected</span>
+            <span class="unsaved" id="unsavedBadge" style="display:none">unsaved</span>
+          </span>
+          <button class="save-btn" id="saveBtn">Save</button>
+        </div>
+        <textarea id="fileContent" style="display:none"></textarea>
+        <div class="empty-state" id="fileEmpty">Select a file to edit</div>
+      </div>
+    </div>
+
+    <!-- Iframe panel for embedded services (PTD etc.) -->
+    <div class="iframe-panel" id="iframePanel">
+      <iframe id="serviceFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- Config ---
+const AGENT_GROUPS = [
+  { id: 'primary', label: 'Primary Contacts', defaultOpen: true,
+    agents: ['main', 'thimble', 'sterling', 'aegis', 'wrangler'] },
+  { id: 'pms', label: 'Project Managers', defaultOpen: true,
+    agents: ['charis', 'createbook-pm', 'dbeatz', 'echos', 'fathom', 'joshuassoul', 'latasha', 'personaplex', 'plates', 'praxis', 'solarknight', 'sous', 'artscout-pm'] },
+  { id: 'specialists', label: 'Specialists', defaultOpen: false,
+    agents: ['artist', 'chrysalis', 'emulator-tester', 'paramedic', 'pentest', 'record-keeper', 'researcher', 'runpod-specialist'] },
+  { id: 'personas', label: 'Personas', defaultOpen: false,
+    agents: ['munger', 'torvalds', 'taleb', 'hormozi', 'graham', 'feynman', 'ogilvy', 'naval', 'rams', 'herzog', 'patrick-clone'] },
+  { id: 'local-models', label: 'Local Models', defaultOpen: false,
+    agents: ['qwen-coder', 'qwen-coder30b', 'qwen35', 'qwen3.5'] },
+];
+
+const SERVICES = [
+  { id: 'ptd', label: 'PTD', port: 3333, mode: 'iframe' },
+  { id: 'command-center', label: 'Command Center', url: '/command-center.html', mode: 'iframe' },
+  { id: 'aegis', label: 'Aegis Portal', port: 3334, mode: 'link' },
+];
+
+// --- State ---
+let currentAgent = null;
+let currentTab = 'chat';
+let currentFile = null;
+let currentService = null;
+let fileOriginal = '';
+// Per-agent streaming state tracked in agentStreams map (see sendMessage)
+let pollTimer = null;
+let allAgents = [];
+let lastRenderedMsgCount = 0;
+let bridgeIsOnline = true;
+
+// Group collapse state from localStorage
+let groupState = {};
+try { groupState = JSON.parse(localStorage.getItem('workshopGroups') || '{}'); } catch {}
+
+function isGroupOpen(groupId, defaultOpen) {
+  return groupState[groupId] !== undefined ? groupState[groupId] : defaultOpen;
+}
+function setGroupOpen(groupId, open) {
+  groupState[groupId] = open;
+  localStorage.setItem('workshopGroups', JSON.stringify(groupState));
+}
+
+const API = '';
+
+// --- Agents ---
+async function loadAgents() {
+  try {
+    const res = await fetch(`${API}/api/agents`);
+    const payload = await res.json();
+    if (payload && Array.isArray(payload.agents)) {
+      bridgeIsOnline = payload.bridgeOnline !== false;
+      allAgents = payload.agents;
+    } else if (Array.isArray(payload)) {
+      allAgents = payload;
+    }
+    renderAgentList(allAgents);
+    if (!currentAgent && !currentService && allAgents.length) {
+      // Default to 'main' if it exists, otherwise first agent
+      const main = allAgents.find(a => a.name === 'main');
+      selectAgent(main ? 'main' : allAgents[0].name);
+    }
+  } catch (e) {
+    console.error('Failed to load agents:', e);
+  }
+}
+
+function formatRelativeTime(isoTs) {
+  if (!isoTs) return '';
+  try {
+    const diff = Date.now() - new Date(isoTs).getTime();
+    if (diff < 0) return '';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d`;
+  } catch { return ''; }
+}
+
+function getDotClass(a) {
+  if (!bridgeIsOnline) return 'agent-dot offline';
+  if (a.hasTelegram) return 'agent-dot';
+  if (a.hasClaude) return 'agent-dot dashboard-only';
+  return 'agent-dot offline';
+}
+
+function getDotTitle(a) {
+  if (!bridgeIsOnline) return 'Bridge offline';
+  if (a.hasTelegram) return 'Telegram';
+  if (a.hasClaude) return 'Dashboard only';
+  return 'No config';
+}
+
+function renderAgentItem(a) {
+  const el = document.createElement('div');
+  el.className = 'agent-item' + (a.name === currentAgent ? ' active' : '');
+  const inboxLabel = a.inboxCount > 0
+    ? `<span class="agent-badge">${a.inboxCount}</span>`
+    : '';
+  const lastActive = formatRelativeTime(a.lastActive);
+  el.innerHTML = `
+    <div class="${getDotClass(a)}" title="${esc(getDotTitle(a))}"></div>
+    <span class="agent-name">${esc(a.displayName || a.name)}</span>
+    ${inboxLabel}
+    ${lastActive ? `<span class="agent-last-active">${esc(lastActive)}</span>` : ''}
+  `;
+  el.onclick = () => selectAgent(a.name);
+  return el;
+}
+
+function renderAgentList(agents) {
+  const search = document.getElementById('agentSearch').value.toLowerCase();
+  const list = document.getElementById('agentList');
+  list.innerHTML = '';
+
+  // Build a lookup map
+  const agentMap = {};
+  for (const a of agents) agentMap[a.name] = a;
+
+  // Track which agents are in defined groups
+  const grouped = new Set();
+
+  for (const group of AGENT_GROUPS) {
+    const groupAgents = group.agents
+      .map(name => agentMap[name])
+      .filter(a => a && (!search || a.name.toLowerCase().includes(search)));
+
+    // Skip empty groups during search
+    if (search && groupAgents.length === 0) continue;
+
+    for (const name of group.agents) grouped.add(name);
+
+    const open = search ? true : isGroupOpen(group.id, group.defaultOpen);
+    const groupEl = document.createElement('div');
+    groupEl.className = 'agent-group' + (open ? '' : ' collapsed');
+
+    const header = document.createElement('div');
+    header.className = 'agent-group-header';
+    header.innerHTML = `
+      <span class="toggle">&#9660;</span>
+      <span>${esc(group.label)}</span>
+      <span class="group-count">${groupAgents.length}</span>
+    `;
+    header.onclick = () => {
+      if (search) return; // Don't toggle during search
+      const isOpen = !groupEl.classList.contains('collapsed');
+      groupEl.classList.toggle('collapsed', isOpen);
+      setGroupOpen(group.id, !isOpen);
+    };
+
+    const items = document.createElement('div');
+    items.className = 'agent-group-items';
+    for (const a of groupAgents) {
+      items.appendChild(renderAgentItem(a));
+    }
+
+    groupEl.appendChild(header);
+    groupEl.appendChild(items);
+    list.appendChild(groupEl);
+  }
+
+  // Render services
+  renderServices();
+}
+
+function renderServices() {
+  const section = document.getElementById('servicesSection');
+  section.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'services-header';
+  header.textContent = 'Services';
+  section.appendChild(header);
+
+  for (const svc of SERVICES) {
+    const el = document.createElement('div');
+    el.className = 'service-item' + (currentService === svc.id ? ' active' : '');
+    const icon = svc.mode === 'iframe' ? '&#9670;' : '&#8599;';
+    el.innerHTML = `
+      <span class="service-icon">${icon}</span>
+      <span class="agent-name">${esc(svc.label)}</span>
+    `;
+    el.onclick = () => selectService(svc);
+    section.appendChild(el);
+  }
+}
+
+function selectService(svc) {
+  if (svc.mode === 'link') {
+    window.open(`http://localhost:${svc.port}`, '_blank');
+    return;
+  }
+
+  // Iframe mode
+  currentAgent = null;
+  currentService = svc.id;
+
+  // Deselect agents in sidebar
+  document.querySelectorAll('.agent-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.service-item').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.agent-name').textContent === svc.label);
+  });
+
+  // Hide chat/files tabs, show service tab
+  const tabBar = document.getElementById('tabBar');
+  tabBar.innerHTML = `<div class="tab active">${esc(svc.label)}</div>`;
+
+  // Hide chat/files panels, show iframe
+  document.getElementById('chatPanel').classList.remove('active');
+  document.getElementById('filesPanel').classList.remove('active');
+  const iframePanel = document.getElementById('iframePanel');
+  const frame = document.getElementById('serviceFrame');
+  const url = svc.url || `http://localhost:${svc.port}`;
+  if (frame.src !== url) frame.src = url;
+  iframePanel.classList.add('active');
+}
+
+function selectAgent(name) {
+  currentAgent = name;
+  currentService = null;
+
+  // Hide iframe, restore agent tabs
+  document.getElementById('iframePanel').classList.remove('active');
+  restoreAgentTabs();
+
+  // Show/hide typing indicator based on this agent's active streams
+  updateTypingIndicator();
+
+  document.querySelectorAll('.agent-item').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.agent-name').textContent === name);
+  });
+  document.querySelectorAll('.service-item').forEach(el => el.classList.remove('active'));
+
+  if (currentTab === 'chat') loadChatHistory();
+  if (currentTab === 'files') loadFileTree();
+}
+
+function restoreAgentTabs() {
+  const tabBar = document.getElementById('tabBar');
+  // Only restore if tabs are missing (service was selected)
+  if (!tabBar.querySelector('[data-tab="chat"]')) {
+    tabBar.innerHTML = `
+      <button class="menu-toggle" id="menuToggle">☰</button>
+      <div class="tab${currentTab === 'chat' ? ' active' : ''}" data-tab="chat">Chat</div>
+      <div class="tab${currentTab === 'files' ? ' active' : ''}" data-tab="files">Files</div>
+    `;
+    document.getElementById('menuToggle').onclick = () => toggleSidebar();
+    tabBar.querySelectorAll('.tab').forEach(tab => {
+      tab.onclick = () => switchTab(tab.dataset.tab);
+    });
+  }
+  // Ensure correct panel visibility
+  document.getElementById('chatPanel').classList.toggle('active', currentTab === 'chat');
+  document.getElementById('filesPanel').classList.toggle('active', currentTab === 'files');
+}
+
+// --- Tabs ---
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.getElementById('chatPanel').classList.toggle('active', name === 'chat');
+  document.getElementById('filesPanel').classList.toggle('active', name === 'files');
+  document.getElementById('iframePanel').classList.remove('active');
+  if (name === 'chat' && currentAgent) loadChatHistory();
+  if (name === 'files' && currentAgent) loadFileTree();
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => switchTab(tab.dataset.tab);
+});
+
+// --- Chat ---
+async function loadChatHistory() {
+  if (!currentAgent) return;
+  // Cancel any pending response poll for a different agent
+  _pendingPollAgent = null;
+  let messages = [];
+  try {
+    const res = await fetch(`${API}/api/chat/${currentAgent}/history?limit=100`);
+    const data = await res.json();
+    messages = data.messages || [];
+    renderMessages(messages);
+  } catch {
+    renderMessages([]);
+  }
+  // Restore any in-progress streaming messages for this agent
+  restoreLiveMessages();
+  // Detect pending responses (e.g. page was refreshed mid-conversation)
+  checkPendingResponse(messages);
+}
+
+function renderMessages(messages) {
+  const container = document.getElementById('chatMessages');
+  container.innerHTML = '';
+  for (const msg of messages) {
+    appendMessage(msg.role, msg.text, msg.source, false, msg.ts || null);
+  }
+  lastRenderedMsgCount = messages.length;
+  scrollChat();
+}
+
+function formatMsgTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    if (sameDay) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+           d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch { return ''; }
+}
+
+function appendMessage(role, text, source, scroll = true, ts = null) {
+  const container = document.getElementById('chatMessages');
+  const el = document.createElement('div');
+  el.className = `chat-msg ${role}`;
+  const tsHtml = ts ? `<div class="msg-ts">${esc(formatMsgTime(ts))}</div>` : '';
+  el.innerHTML = `
+    <div class="source-badge">${esc(source || '')}</div>
+    <div class="msg-text">${renderMarkdown(text)}</div>
+    ${tsHtml}
+  `;
+  container.appendChild(el);
+  if (scroll) scrollChat();
+  return el;
+}
+
+function scrollChat() {
+  const c = document.getElementById('chatMessages');
+  c.scrollTop = c.scrollHeight;
+}
+
+// --- Markdown rendering (lightweight) ---
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = esc(text);
+
+  // Code blocks (``` ... ```)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    return `<pre><code>${code}</code></pre>`;
+  });
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Italic
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Links — block javascript: URIs to prevent XSS
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const safe = /^(https?|ftp|#)/i.test(url.trim());
+    return safe ? `<a href="${url}" target="_blank">${label}</a>` : label;
+  });
+
+  return html;
+}
+
+function esc(s) {
+  const el = document.createElement('span');
+  el.textContent = s;
+  return el.innerHTML;
+}
+
+// --- Send message ---
+// Messages run concurrently — each fires SSE independently.
+// The bridge queues them and processes sequentially, so ordering is safe.
+// The UI stays responsive: you can queue follow-up messages while waiting.
+// Per-agent stream tracking — key: agent name, value: count of active streams
+const agentStreams = {};
+// Per-agent live streaming state — survives agent switches
+// { [agent]: [{ fullText, indicatorText, msgEl }] }
+const agentLiveState = {};
+
+function updateTypingIndicator() {
+  const count = agentStreams[currentAgent] || 0;
+  const indicator = document.getElementById('typingIndicator');
+  if (count > 0) {
+    indicator.classList.add('visible');
+    // Pull status text from the most recent live entry
+    const live = agentLiveState[currentAgent];
+    const latest = live && live.length > 0 ? live[live.length - 1] : null;
+    const statusText = latest ? latest.indicatorText : 'Thinking...';
+    indicator.textContent = count > 1 ? `Working (${count} queued)...` : statusText;
+  } else {
+    indicator.classList.remove('visible');
+  }
+}
+
+// Restore in-progress streaming messages after loading history
+function restoreLiveMessages() {
+  const live = agentLiveState[currentAgent];
+  if (!live || live.length === 0) return;
+
+  // Collect rendered user message texts for dedup
+  const rendered = new Set();
+  document.querySelectorAll('#chatMessages .chat-msg.user .msg-text').forEach(el => {
+    rendered.add(el.textContent);
+  });
+
+  for (const entry of live) {
+    // Show user message if not already in rendered history
+    if (entry.userText && !rendered.has(entry.userText)) {
+      appendMessage('user', entry.userText, 'dashboard', false, entry.startTs);
+      rendered.add(entry.userText);
+    }
+
+    // Show assistant in-progress response
+    const msgEl = appendMessage('assistant', '', 'dashboard', false);
+    const textEl = msgEl.querySelector('.msg-text');
+    if (entry.fullText) {
+      textEl.innerHTML = renderMarkdown(entry.fullText);
+    } else {
+      textEl.innerHTML = '<em style="color:var(--text-dim)">' + esc(entry.indicatorText || 'Thinking...') + '</em>';
+    }
+    entry.msgEl = msgEl;
+  }
+  scrollChat();
+}
+
+// On page load/refresh: detect pending responses (last msg is user, recent, no live state)
+let _pendingPollAgent = null;
+function checkPendingResponse(messages) {
+  if (!messages.length) return;
+  const last = messages[messages.length - 1];
+  if (last.role !== 'user') return;
+  // Only poll if the user message is recent (< 10 minutes)
+  const age = last.ts ? Date.now() - new Date(last.ts).getTime() : Infinity;
+  if (age > 10 * 60 * 1000) return;
+  // Don't poll if we already have live state for this agent
+  if (agentLiveState[currentAgent]?.length > 0) return;
+
+  const agent = currentAgent;
+  _pendingPollAgent = agent;
+  const msgEl = appendMessage('assistant', '', 'dashboard', false);
+  const textEl = msgEl.querySelector('.msg-text');
+  textEl.innerHTML = '<em style="color:var(--text-dim)">Waiting for response...</em>';
+  scrollChat();
+
+  (async () => {
+    const baseCount = messages.length;
+    for (let i = 0; i < 150; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (_pendingPollAgent !== agent) { if (msgEl.isConnected) msgEl.remove(); return; }
+      try {
+        const res = await fetch(`${API}/api/chat/${agent}/history?limit=100`);
+        const data = await res.json();
+        const msgs = data.messages || [];
+        if (msgs.length > baseCount && msgs[msgs.length - 1].role === 'assistant') {
+          _pendingPollAgent = null;
+          if (msgEl.isConnected) msgEl.remove();
+          if (currentAgent === agent) {
+            renderMessages(msgs);
+            restoreLiveMessages();
+          }
+          return;
+        }
+      } catch {}
+    }
+    _pendingPollAgent = null;
+    textEl.innerHTML = '<em style="color:var(--text-dim)">No response yet — check bridge</em>';
+  })();
+}
+
+// --- Slash commands (handled client-side) ---
+function handleSlashCommand(cmd) {
+  const parts = cmd.slice(1).split(/\s+/);
+  const name = parts[0].toLowerCase();
+
+  if (name === 'clear') {
+    document.getElementById('chatMessages').innerHTML = '';
+    // Don't reset lastRenderedMsgCount — server history is unchanged,
+    // so poll won't re-render the old messages
+    return true;
+  }
+
+  if (name === 'new') {
+    if (!currentAgent) return true;
+    if (!confirm(`Start a new session for ${currentAgent}? This won't delete history but the agent will lose conversation context.`)) return true;
+    (async () => {
+      try {
+        const res = await fetch(`${API}/api/chat/${currentAgent}/new-session`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+          appendMessage('assistant', `New session started. ${currentAgent} will start fresh on the next message.`, 'system', true, Date.now());
+        } else {
+          appendMessage('assistant', `Failed to reset session: ${data.error || 'unknown error'}`, 'system', true, Date.now());
+        }
+      } catch (e) {
+        appendMessage('assistant', `Error: ${e.message}`, 'system', true, Date.now());
+      }
+    })();
+    return true;
+  }
+
+  if (name === 'compact') {
+    appendMessage('assistant', 'Context compaction happens automatically when the context window fills up. No manual action needed.', 'system', true, Date.now());
+    return true;
+  }
+
+  if (name === 'help') {
+    appendMessage('assistant', [
+      '**Available commands:**',
+      '`/new` — Start a fresh session (agent loses conversation context)',
+      '`/clear` — Clear the chat display',
+      '`/compact` — Context compaction (automatic)',
+      '`/help` — Show this message',
+      '',
+      'All other messages are sent to the agent as prompts.',
+    ].join('\n'), 'system', true, Date.now());
+    return true;
+  }
+
+  // Unknown slash command — send as regular message
+  return false;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !currentAgent) return;
+
+  // Check for slash commands
+  if (text.startsWith('/')) {
+    if (handleSlashCommand(text)) {
+      input.value = '';
+      autoResize(input);
+      return;
+    }
+  }
+
+  input.value = '';
+  autoResize(input);
+
+  // Add user message to DOM immediately
+  appendMessage('user', text, 'dashboard', true, Date.now());
+
+  // Create placeholder for assistant response
+  const msgEl = appendMessage('assistant', '', 'dashboard');
+  const textEl = msgEl.querySelector('.msg-text');
+  textEl.innerHTML = '<em style="color:var(--text-dim)">Queued...</em>';
+
+  const agent = currentAgent;  // capture — user may switch agents mid-stream
+
+  // Track live state so response survives agent switches
+  const liveEntry = { fullText: '', indicatorText: 'Queued...', msgEl: msgEl, userText: text, startTs: Date.now() };
+  if (!agentLiveState[agent]) agentLiveState[agent] = [];
+  agentLiveState[agent].push(liveEntry);
+  // Cancel any pending response poll since we now have live tracking
+  if (_pendingPollAgent === agent) _pendingPollAgent = null;
+
+  agentStreams[agent] = (agentStreams[agent] || 0) + 1;
+  updateTypingIndicator();
+
+  // Abort controller: 2 min timeout on fetch, cancellable on cleanup
+  const controller = new AbortController();
+  liveEntry.abortController = controller;
+  const fetchTimeout = setTimeout(() => controller.abort(), 120_000);
+
+  try {
+    const res = await fetch(`${API}/api/chat/${currentAgent}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text }),
+      signal: controller.signal,
+    });
+    clearTimeout(fetchTimeout);
+
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status}`;
+      try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch {}
+      if (liveEntry.msgEl && liveEntry.msgEl.isConnected) {
+        liveEntry.msgEl.querySelector('.msg-text').innerHTML = `<em style="color:var(--red)">Error: ${esc(errMsg)}</em>`;
+      }
+      // Clean up live entry
+      const arr = agentLiveState[agent];
+      if (arr) { const i = arr.indexOf(liveEntry); if (i >= 0) arr.splice(i, 1); if (arr.length === 0) delete agentLiveState[agent]; }
+      agentStreams[agent] = Math.max(0, (agentStreams[agent] || 0) - 1);
+      updateTypingIndicator();
+      return;
+    }
+
+    liveEntry.indicatorText = 'Thinking...';
+    if (liveEntry.msgEl && liveEntry.msgEl.isConnected) {
+      liveEntry.msgEl.querySelector('.msg-text').innerHTML = '<em style="color:var(--text-dim)">Thinking...</em>';
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    // Proper SSE state machine: accumulate event type + data, dispatch on blank line
+    let sseEventType = null;
+    let sseData = '';
+    let streamDone = false;
+
+    function dispatchSSE(evtType, rawData) {
+      try {
+        const data = JSON.parse(rawData);
+        const el = (liveEntry.msgEl && liveEntry.msgEl.isConnected) ? liveEntry.msgEl.querySelector('.msg-text') : null;
+
+        if (evtType === 'error') {
+          if (el) el.innerHTML = `<em style="color:var(--red)">Error: ${esc(data.error || 'Unknown error')}</em>`;
+          streamDone = true;
+        } else if (evtType === 'result') {
+          if (data.text != null && data.text.length > liveEntry.fullText.length) {
+            liveEntry.fullText = data.text;
+            if (el) { el.innerHTML = renderMarkdown(liveEntry.fullText); scrollChat(); }
+          }
+        } else if (evtType === 'done') {
+          streamDone = true;
+        } else if (evtType === 'progress') {
+          if (data.type === 'tool_start') liveEntry.indicatorText = `Using ${data.tool}...`;
+          else if (data.type === 'tool_use') liveEntry.indicatorText = `Used ${data.tool}`;
+          else if (data.type === 'tool_stop') liveEntry.indicatorText = 'Thinking...';
+          if (currentAgent === agent) updateTypingIndicator();
+        } else {
+          // Text token (bare data: line, no event type)
+          liveEntry.fullText += (data.text || '');
+          if (el) { el.innerHTML = renderMarkdown(liveEntry.fullText); scrollChat(); }
+          liveEntry.indicatorText = 'Writing...';
+          if (currentAgent === agent) updateTypingIndicator();
+        }
+      } catch {}
+    }
+
+    while (!streamDone) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+      } else {
+        buffer += decoder.decode(value, { stream: true });
+      }
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (line === '') {
+          // Blank line = dispatch accumulated event
+          if (sseData) dispatchSSE(sseEventType, sseData);
+          sseEventType = null;
+          sseData = '';
+          if (streamDone) break;
+        } else if (line.startsWith('event: ')) {
+          sseEventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          sseData += (sseData ? '\n' : '') + line.slice(6);
+        }
+        // SSE comments (: heartbeat) are ignored
+      }
+
+      if (done || streamDone) break;
+    }
+    try { reader.cancel(); } catch {}
+  } catch (e) {
+    clearTimeout(fetchTimeout);
+    if (!liveEntry.fullText) {
+      const el = (liveEntry.msgEl && liveEntry.msgEl.isConnected) ? liveEntry.msgEl.querySelector('.msg-text') : null;
+      const msg = e.name === 'AbortError' ? 'Request timed out' : e.message;
+      if (el) el.innerHTML = `<em style="color:var(--red)">Error: ${esc(msg)}</em>`;
+    }
+  }
+
+  // Stamp assistant message timestamp
+  if (liveEntry.fullText && liveEntry.msgEl && liveEntry.msgEl.isConnected) {
+    const existingTs = liveEntry.msgEl.querySelector('.msg-ts');
+    const tsStr = formatMsgTime(Date.now());
+    if (existingTs) {
+      existingTs.textContent = tsStr;
+    } else {
+      const tsDiv = document.createElement('div');
+      tsDiv.className = 'msg-ts';
+      tsDiv.textContent = tsStr;
+      liveEntry.msgEl.appendChild(tsDiv);
+    }
+  }
+
+  // Force a poll shortly to sync with server history
+  if (liveEntry.fullText && agent === currentAgent) {
+    setTimeout(pollMessages, 500);
+  }
+
+  // Fallback: if SSE didn't deliver tokens, poll history until response appears
+  if (!liveEntry.fullText) {
+    const el = (liveEntry.msgEl && liveEntry.msgEl.isConnected) ? liveEntry.msgEl.querySelector('.msg-text') : null;
+    if (el) el.innerHTML = '<em style="color:var(--text-dim)">Waiting for response...</em>';
+    const histBefore = lastRenderedMsgCount;
+    let found = false;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const hRes = await fetch(`${API}/api/chat/${agent}/history?limit=100`);
+        const hData = await hRes.json();
+        const msgs = hData.messages || [];
+        if (msgs.length >= histBefore + 2 && msgs[msgs.length - 1].role === 'assistant') {
+          found = true;
+          if (liveEntry.msgEl && liveEntry.msgEl.isConnected) liveEntry.msgEl.remove();
+          if (currentAgent === agent) renderMessages(msgs);
+          break;
+        }
+      } catch {}
+    }
+    if (!found && el) {
+      el.innerHTML = '<em style="color:var(--text-dim)">No response yet — check bridge</em>';
+    }
+  }
+
+  // Clean up live entry
+  const liveArr = agentLiveState[agent];
+  if (liveArr) {
+    const idx = liveArr.indexOf(liveEntry);
+    if (idx >= 0) liveArr.splice(idx, 1);
+    if (liveArr.length === 0) delete agentLiveState[agent];
+  }
+
+  agentStreams[agent] = Math.max(0, (agentStreams[agent] || 0) - 1);
+  updateTypingIndicator();
+}
+
+document.getElementById('sendBtn').onclick = sendMessage;
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Auto-resize textarea
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+document.getElementById('chatInput').addEventListener('input', function() { autoResize(this); });
+
+// --- Files ---
+async function loadFileTree() {
+  if (!currentAgent) return;
+  try {
+    const res = await fetch(`${API}/api/agents/${currentAgent}/files`);
+    const files = await res.json();
+    renderFileTree(files);
+  } catch {
+    document.getElementById('fileTree').innerHTML = '<div class="file-item" style="color:var(--red)">Failed to load</div>';
+  }
+}
+
+function renderFileTree(files) {
+  const tree = document.getElementById('fileTree');
+  tree.innerHTML = '';
+  for (const f of files) {
+    const el = document.createElement('div');
+    el.className = 'file-item' + (f.name === 'CLAUDE.md' ? ' claude-md' : '') + (f.path === currentFile ? ' active' : '');
+    el.textContent = f.name;
+    el.title = f.path;
+    el.onclick = () => openFile(f.path, f.name);
+    tree.appendChild(el);
+  }
+}
+
+async function openFile(filePath, name) {
+  if (currentFile && fileOriginal !== document.getElementById('fileContent').value) {
+    if (!confirm('Discard unsaved changes?')) return;
+  }
+  currentFile = filePath;
+  document.querySelectorAll('.file-item').forEach(el => {
+    el.classList.toggle('active', el.title === filePath);
+  });
+
+  try {
+    const res = await fetch(`${API}/api/file?path=${encodeURIComponent(filePath)}`);
+    const text = await res.text();
+    fileOriginal = text;
+    const editor = document.getElementById('fileContent');
+    editor.value = text;
+    editor.style.display = 'block';
+    document.getElementById('fileEmpty').style.display = 'none';
+    document.getElementById('filePath').textContent = name;
+    document.getElementById('unsavedBadge').style.display = 'none';
+    document.getElementById('saveBtn').classList.remove('visible');
+  } catch (e) {
+    document.getElementById('filePath').textContent = 'Error loading file';
+  }
+}
+
+async function saveFile() {
+  if (!currentFile) return;
+  const content = document.getElementById('fileContent').value;
+  try {
+    await fetch(`${API}/api/file?path=${encodeURIComponent(currentFile)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: content,
+    });
+    fileOriginal = content;
+    document.getElementById('unsavedBadge').style.display = 'none';
+    document.getElementById('saveBtn').classList.remove('visible');
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+  }
+}
+
+document.getElementById('fileContent').addEventListener('input', () => {
+  const changed = document.getElementById('fileContent').value !== fileOriginal;
+  document.getElementById('unsavedBadge').style.display = changed ? 'inline' : 'none';
+  document.getElementById('saveBtn').classList.toggle('visible', changed);
+});
+
+document.getElementById('saveBtn').onclick = saveFile;
+
+// Cmd+S to save
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    if (currentTab === 'files' && currentFile) saveFile();
+  }
+});
+
+// --- Bridge health ---
+async function checkBridgeHealth() {
+  try {
+    const res = await fetch(`${API}/api/bridge/health`);
+    const data = await res.json();
+    document.getElementById('bridgeDot').classList.remove('error');
+    document.getElementById('bridgeStatus').textContent = `Bridge: ${data.bots || 0} bots`;
+    const depth = data.queue_depth || 0;
+    document.getElementById('queueInfo').textContent = depth > 0 ? `Queue: ${depth}` : '';
+  } catch {
+    document.getElementById('bridgeDot').classList.add('error');
+    document.getElementById('bridgeStatus').textContent = 'Bridge offline';
+    document.getElementById('queueInfo').textContent = '';
+  }
+}
+
+// --- Polling for new messages ---
+async function pollMessages() {
+  if (!currentAgent || (agentStreams[currentAgent] || 0) > 0 || currentTab !== 'chat' || _pendingPollAgent) return;
+  try {
+    const res = await fetch(`${API}/api/chat/${currentAgent}/history?limit=100`);
+    const data = await res.json();
+    const msgs = data.messages || [];
+    if (msgs.length > lastRenderedMsgCount) {
+      renderMessages(msgs);
+      restoreLiveMessages();
+      scrollChat();
+    }
+  } catch {}
+}
+
+// --- Search ---
+document.getElementById('agentSearch').addEventListener('input', () => renderAgentList(allAgents));
+
+// --- Bridge restart ---
+document.getElementById('restartBridgeBtn').onclick = async () => {
+  const btn = document.getElementById('restartBridgeBtn');
+  if (!confirm('Restart the bridge? Active queries will be interrupted.')) return;
+  btn.disabled = true;
+  btn.textContent = 'Restarting...';
+  try {
+    await fetch(`${API}/api/bridge/restart`, { method: 'POST' });
+    document.getElementById('bridgeStatus').textContent = 'Restarting...';
+    document.getElementById('bridgeDot').classList.add('error');
+    // Poll until bridge is back
+    for (let i = 0; i < 15; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const res = await fetch(`${API}/api/bridge/health`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'ok' && data.uptime_s < 30) {
+            document.getElementById('bridgeStatus').textContent = `Bridge online (restarted)`;
+            document.getElementById('bridgeDot').classList.remove('error');
+            btn.textContent = '⟳ Restart';
+            btn.disabled = false;
+            return;
+          }
+        }
+      } catch {}
+    }
+    document.getElementById('bridgeStatus').textContent = 'Restart may have failed';
+  } catch (e) {
+    document.getElementById('bridgeStatus').textContent = `Restart error: ${e.message}`;
+  }
+  btn.textContent = '⟳ Restart';
+  btn.disabled = false;
+};
+
+// --- Mobile sidebar ---
+function toggleSidebar(open) {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (open === undefined) open = !sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', open);
+  backdrop.classList.toggle('visible', open);
+}
+document.getElementById('menuToggle').onclick = () => toggleSidebar();
+document.getElementById('sidebarBackdrop').onclick = () => toggleSidebar(false);
+
+// Close sidebar when selecting an agent/service on mobile
+const _origSelectAgent = selectAgent;
+selectAgent = function(name) {
+  _origSelectAgent(name);
+  if (window.innerWidth < 768) toggleSidebar(false);
+};
+const _origSelectService = selectService;
+selectService = function(svc) {
+  _origSelectService(svc);
+  if (window.innerWidth < 768 && svc.mode !== 'link') toggleSidebar(false);
+};
+
+// --- Init ---
+loadAgents();
+checkBridgeHealth();
+setInterval(checkBridgeHealth, 10000);
+setInterval(pollMessages, 5000);
+setInterval(loadAgents, 30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "memory-search": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["PATH_TO_WORKSHOP_STARTER/memory-mcp/server.mjs"],
+      "env": {
+        "MEMORY_DIR": "/Users/YOUR_USERNAME/.workshop/memory",
+        "VEC_DYLIB": "/PATH_TO/sqlite-vec.dylib",
+        "OLLAMA_URL": "http://localhost:11434/v1/embeddings",
+        "EMBED_MODEL": "embeddinggemma:300m"
+      }
+    }
+  }
+}

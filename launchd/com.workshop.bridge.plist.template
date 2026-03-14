@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.workshop.telegram-bridge</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Replace with path to your python3 interpreter (conda, venv, or system) -->
+    <string>/usr/bin/python3</string>
+    <string>YOUR_HOME_DIR/claude-agents/workshop-starter/bridge/telegram-bridge.py</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>StandardOutPath</key>
+  <string>YOUR_HOME_DIR/.claude/logs/telegram-bridge.log</string>
+  <key>StandardErrorPath</key>
+  <string>YOUR_HOME_DIR/.claude/logs/telegram-bridge.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>YOUR_HOME_DIR</string>
+    <key>PATH</key>
+    <!-- Adjust PATH to include your Python environment and claude CLI -->
+    <string>YOUR_HOME_DIR/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Optional: override workshop paths -->
+    <!-- <key>WORKSHOP_AGENTS_DIR</key> -->
+    <!-- <string>YOUR_HOME_DIR/claude-agents</string> -->
+    <!-- <key>WORKSHOP_STATE_DIR</key> -->
+    <!-- <string>YOUR_HOME_DIR/.claude/state</string> -->
+    <!-- <key>WORKSHOP_LOG_DIR</key> -->
+    <!-- <string>YOUR_HOME_DIR/.claude/logs</string> -->
+    <!-- <key>CLAUDE_TIMEOUT_S</key> -->
+    <!-- <string>600</string> -->
+  </dict>
+</dict>
+</plist>

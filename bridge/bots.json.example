@@ -1,0 +1,18 @@
+{
+  "allowedUsers": ["YOUR_TELEGRAM_USER_ID"],
+  "model": "claude-sonnet-4-6",
+  "bots": [
+    {
+      "name": "main",
+      "tokenFile": "/Users/YOUR_USERNAME/.workshop/secrets/telegram-main.token",
+      "agentDir": "/Users/YOUR_USERNAME/claude-agents/main/",
+      "comment": "Your commandant agent — the workshop orchestrator"
+    },
+    {
+      "name": "pm-example",
+      "tokenFile": "/Users/YOUR_USERNAME/.workshop/secrets/telegram-pm.token",
+      "agentDir": "/Users/YOUR_USERNAME/claude-agents/pm-example/",
+      "comment": "Example project PM agent"
+    }
+  ]
+}
