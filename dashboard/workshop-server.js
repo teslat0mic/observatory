@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync, exec } = require('child_process');
+const { randomUUID } = require('crypto');
 
 const https = require('https');
 
@@ -106,12 +107,6 @@ function saveJobs(data) {
   fs.renameSync(tmp, JOBS_FILE);
 }
 
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
-}
 
 function pushover(title, message, url) {
   const token = process.env.PUSHOVER_TOKEN;
@@ -133,7 +128,7 @@ function pushover(title, message, url) {
   req.end();
 }
 
-function routeToAgent(task) {
+function routeToAgent(task, onSettled) {
   if (!task.sessionKey || !task.resumptionTemplate || !task.response) return;
   const parts = task.sessionKey.split(':');
   const agentName = parts[0];
@@ -156,9 +151,10 @@ function routeToAgent(task) {
   const req = http.request(options, (res) => {
     res.resume();
     task.routingResult = res.statusCode < 400 ? 'sent' : 'failed';
+    if (onSettled) onSettled();
   });
-  req.on('error', () => { task.routingResult = 'failed'; });
-  req.setTimeout(10000, () => { req.destroy(); task.routingResult = 'failed'; });
+  req.on('error', () => { task.routingResult = 'failed'; if (onSettled) onSettled(); });
+  req.setTimeout(10000, () => { req.destroy(); task.routingResult = 'failed'; if (onSettled) onSettled(); });
   req.write(body);
   req.end();
 }
@@ -718,7 +714,7 @@ async function handleRequest(req, res) {
     if (body.type && !validTypes.includes(body.type)) return jsonRes(res, 400, { error: 'type must be manual or approval' });
 
     const task = {
-      id: generateUUID(),
+      id: randomUUID(),
       title: body.title,
       detail: body.detail || '',
       project: body.project || '',
@@ -781,13 +777,18 @@ async function handleRequest(req, res) {
 
       // Attempt agent routing if applicable
       if (task.sessionKey && task.resumptionTemplate && task.response) {
-        try { routeToAgent(task); } catch (e) { log(`Routing error: ${e.message}`); task.routingResult = 'failed'; }
+        try {
+          routeToAgent(task, () => {
+            // Save again after routing completes so routingResult is persisted
+            try { saveJobs(data); } catch (e) { log(`saveJobs after routing error: ${e.message}`); }
+          });
+        } catch (e) { log(`Routing error: ${e.message}`); task.routingResult = 'failed'; }
       }
 
       log(`Job completed: ${task.id} "${task.title}"`);
     }
 
-    saveJobs(data);
+    saveJobs(data); // save immediately (routingResult may be updated again async after routing)
     return jsonRes(res, 200, task);
   }
 

@@ -37,18 +37,22 @@ async function embedQuery(query) {
 
 // --- Database helpers ---
 
+let vecAvailable = false;
+
 function openDb(agent) {
   const dbPath = path.join(MEMORY_DIR, `${agent}.sqlite`);
   const db = Database(dbPath, { readonly: true });
   if (VEC_DYLIB) {
     try {
       db.loadExtension(VEC_DYLIB);
+      vecAvailable = true;
     } catch (e) {
-      // vec0 not available — fall back to JS cosine similarity
-      console.error(`[memory-mcp] vec0 extension not loaded: ${e.message}`);
+      vecAvailable = false;
+      console.error(`[memory-mcp] vec0 extension not loaded: ${e.message} — using keyword-only (FTS5) search`);
     }
   } else {
-    console.error(`[memory-mcp] VEC_DYLIB not set — vector search will use JS fallback`);
+    vecAvailable = false;
+    console.error(`[memory-mcp] VEC_DYLIB not set — using keyword-only (FTS5) search`);
   }
   return db;
 }
@@ -81,57 +85,39 @@ function tokenizeQuery(query) {
 async function hybridSearch(db, queryEmbedding, queryText, sources = ["memory", "sessions"]) {
   const scoreMap = new Map(); // id -> { vectorScore, textScore, chunk }
 
-  // 1. Vector search
+  // 1. Vector search (only if sqlite-vec is available)
   const candidateLimit = MAX_RESULTS * 5;
-  let vecHasSupport = false;
 
-  try {
-    // Try native vec0 search
-    const placeholders = sources.map(() => "?").join(",");
-    const vecSql = `
-      SELECT c.id, c.path, c.start_line, c.end_line, c.text, c.source,
-             vec_distance_cosine(v.embedding, ?) AS dist
-        FROM chunks_vec v
-        JOIN chunks c ON c.id = v.id
-       WHERE c.model = ?
-         AND c.source IN (${placeholders})
-       ORDER BY dist ASC
-       LIMIT ?
-    `;
-    // Convert float64 array to Float32Array buffer for vec0
-    const f32 = new Float32Array(queryEmbedding);
-    const vecRows = db.prepare(vecSql).all(Buffer.from(f32.buffer), EMBED_MODEL, ...sources, candidateLimit);
-    vecHasSupport = true;
+  if (vecAvailable && queryEmbedding) {
+    try {
+      const placeholders = sources.map(() => "?").join(",");
+      const vecSql = `
+        SELECT c.id, c.path, c.start_line, c.end_line, c.text, c.source,
+               vec_distance_cosine(v.embedding, ?) AS dist
+          FROM chunks_vec v
+          JOIN chunks c ON c.id = v.id
+         WHERE c.model = ?
+           AND c.source IN (${placeholders})
+         ORDER BY dist ASC
+         LIMIT ?
+      `;
+      // Convert float64 array to Float32Array buffer for vec0
+      const f32 = new Float32Array(queryEmbedding);
+      const vecRows = db.prepare(vecSql).all(Buffer.from(f32.buffer), EMBED_MODEL, ...sources, candidateLimit);
 
-    for (const row of vecRows) {
-      const score = 1 - row.dist;
-      scoreMap.set(row.id, {
-        vectorScore: score,
-        textScore: 0,
-        chunk: { id: row.id, path: row.path, startLine: row.start_line, endLine: row.end_line, text: row.text, source: row.source },
-      });
+      for (const row of vecRows) {
+        const score = 1 - row.dist;
+        scoreMap.set(row.id, {
+          vectorScore: score,
+          textScore: 0,
+          chunk: { id: row.id, path: row.path, startLine: row.start_line, endLine: row.end_line, text: row.text, source: row.source },
+        });
+      }
+    } catch (e) {
+      console.error(`[memory-mcp] Vector search failed: ${e.message} — falling back to FTS5-only`);
     }
-  } catch {
-    // Fallback: JS cosine similarity over all chunks
-    const placeholders = sources.map(() => "?").join(",");
-    const allChunks = db
-      .prepare(`SELECT id, path, start_line, end_line, text, source, embedding FROM chunks WHERE model = ? AND source IN (${placeholders})`)
-      .all(EMBED_MODEL, ...sources);
-
-    const scored = allChunks.map((row) => {
-      const emb = JSON.parse(row.embedding);
-      const sim = cosineSimilarity(queryEmbedding, emb);
-      return { ...row, sim };
-    });
-    scored.sort((a, b) => b.sim - a.sim);
-
-    for (const row of scored.slice(0, candidateLimit)) {
-      scoreMap.set(row.id, {
-        vectorScore: row.sim,
-        textScore: 0,
-        chunk: { id: row.id, path: row.path, startLine: row.start_line, endLine: row.end_line, text: row.text, source: row.source },
-      });
-    }
+  } else if (!vecAvailable) {
+    console.error(`[memory-mcp] sqlite-vec not available — using keyword-only (FTS5) search`);
   }
 
   // 2. BM25 keyword search
@@ -173,13 +159,21 @@ async function hybridSearch(db, queryEmbedding, queryText, sources = ["memory", 
   // 3. Merge scores and filter
   const results = [];
   for (const [, entry] of scoreMap) {
-    const finalScore = VECTOR_WEIGHT * entry.vectorScore + TEXT_WEIGHT * entry.textScore;
-    if (finalScore >= MIN_SCORE) {
-      results.push({ ...entry.chunk, score: finalScore });
+    if (vecAvailable) {
+      // Hybrid scoring: weighted combination of vector and text scores
+      const finalScore = VECTOR_WEIGHT * entry.vectorScore + TEXT_WEIGHT * entry.textScore;
+      if (finalScore >= MIN_SCORE) {
+        results.push({ ...entry.chunk, score: finalScore });
+      }
+    } else {
+      // FTS5-only fallback: use BM25 text score directly, no vector component
+      if (entry.textScore >= MIN_SCORE) {
+        results.push({ ...entry.chunk, score: entry.textScore });
+      }
     }
   }
 
-  results.sort((a, b) => b.score - a.score);
+  results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   return results.slice(0, MAX_RESULTS);
 }
 
@@ -206,7 +200,7 @@ server.tool(
     }
 
     try {
-      const queryEmbedding = await embedQuery(query);
+      const queryEmbedding = vecAvailable ? await embedQuery(query) : null;
       const results = await hybridSearch(db, queryEmbedding, query);
 
       if (results.length === 0) {
@@ -216,7 +210,8 @@ server.tool(
       const formatted = results
         .map((r, i) => {
           const snippet = r.text.length > SNIPPET_MAX_CHARS ? r.text.slice(0, SNIPPET_MAX_CHARS) + "..." : r.text;
-          return `### Result ${i + 1} (score: ${r.score.toFixed(3)})\n**${r.path}** lines ${r.startLine}-${r.endLine}\n\n${snippet}`;
+          const scoreStr = r.score != null ? r.score.toFixed(3) : 'n/a';
+          return `### Result ${i + 1} (score: ${scoreStr})\n**${r.path}** lines ${r.startLine}-${r.endLine}\n\n${snippet}`;
         })
         .join("\n\n---\n\n");
 

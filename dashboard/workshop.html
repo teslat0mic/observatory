@@ -1167,7 +1167,15 @@ function switchTab(name) {
   document.getElementById('iframePanel').classList.remove('active');
   if (name === 'chat' && currentAgent) loadChatHistory();
   if (name === 'files' && currentAgent) loadFileTree();
-  if (name === 'jobs') loadJobBoard();
+  if (name === 'jobs') {
+    loadJobBoard();
+    if (!jobBoardInterval) {
+      jobBoardInterval = setInterval(() => { if (!jobBoardShowArchived) loadJobBoard(); }, 30000);
+    }
+  } else {
+    clearInterval(jobBoardInterval);
+    jobBoardInterval = null;
+  }
 }
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -1821,6 +1829,7 @@ selectService = function(svc) {
 let jobBoardShowArchived = false;
 let jobExpandedId = null;
 let jobBoardData = [];
+let jobBoardInterval = null;
 
 function toggleJobArchive() {
   jobBoardShowArchived = !jobBoardShowArchived;
@@ -2014,7 +2023,6 @@ loadJobBoard();
 setInterval(checkBridgeHealth, 10000);
 setInterval(pollMessages, 5000);
 setInterval(loadAgents, 30000);
-setInterval(() => { if (!jobBoardShowArchived) loadJobBoard(); }, 30000);
 </script>
 </body>
 </html>

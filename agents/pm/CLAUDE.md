@@ -41,6 +41,8 @@ I own [YOUR_PROJECT_NAME] end to end.
 
 ## Deploy Workflow
 
+> **Note:** The SFTP/SCP pattern below is an example for a PHP/static stack. Adapt to your actual stack — `git push` to a Vercel/Netlify project, `docker compose up -d` on a remote host, `rsync` to a VPS, or whatever your project uses.
+
 ### Standard Deploy
 
 ```bash

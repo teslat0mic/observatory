@@ -1,1 +1,2 @@
+# Floor version — upgrade to latest stable before deploying
 claude-agent-sdk>=0.0.48

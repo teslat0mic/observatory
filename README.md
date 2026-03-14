@@ -36,7 +36,14 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-Follow the printed next steps. The setup script handles dependencies, directory scaffolding, and LaunchAgent registration. Check `setup.sh` for the full details rather than repeating them here.
+Follow the printed next steps. The setup script handles dependencies, directory scaffolding, and generates LaunchAgent plist files. Check `setup.sh` for the full details rather than repeating them here.
+
+After `setup.sh` completes, you must manually load the LaunchAgents:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.workshop.bridge.plist
+launchctl load ~/Library/LaunchAgents/com.workshop.dashboard.plist
+```
 
 ---
 
@@ -81,7 +88,7 @@ Copy the relevant template into `~/claude-agents/{yourname}/` and fill in the `C
   {
     "name": "myagent",
     "tokenFile": "~/.workshop/tokens/myagent.token",
-    "agent_dir": "~/claude-agents/myagent"
+    "agentDir": "~/claude-agents/myagent"
   }
 ]
 ```
@@ -91,7 +98,19 @@ Agents without a `tokenFile` are dashboard-only (no Telegram polling).
 
 **`.mcp.json`** — MCP server config for memory. Requires `VEC_DYLIB` pointing to your `sqlite-vec` dylib. The setup script finds this automatically on macOS.
 
-**`launchd/`** — LaunchAgent plists for auto-starting the bridge and dashboard on login. `setup.sh` registers these via `launchctl`.
+**`launchd/`** — LaunchAgent plists for auto-starting the bridge and dashboard on login. The setup script generates LaunchAgent plist files and prints the commands to load them. After running `setup.sh`, load them manually:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.workshop.bridge.plist
+launchctl load ~/Library/LaunchAgents/com.workshop.dashboard.plist
+```
+
+---
+
+## Finding Logs
+
+- Bridge log: `tail -f ~/.claude/logs/telegram-bridge.log`
+- Dashboard log: `tail -f ~/.claude/logs/workshop-server.log`
 
 ---
 
@@ -116,6 +135,8 @@ All agents spawned by the bridge run with **full filesystem and shell access** �
 - The bridge API on port 3460 is also localhost-only — do not port-forward it
 
 Your `allowedUsers` list is the only gate for Telegram messages. Treat compromised bot tokens as compromised shell access.
+
+> **Important:** Replace `YOUR_TELEGRAM_USER_ID` in each bot's `allowedUsers` with your real Telegram user ID, or ALL messages will be silently rejected. You can find your user ID by messaging [@userinfobot](https://t.me/userinfobot) on Telegram.
 
 ---
 
@@ -158,7 +179,22 @@ curl -X POST http://localhost:3500/api/jobs \
   -d '{"title":"Review this PR","detail":"...","project":"myapp","priority":"medium","type":"approval","createdBy":"pm-agent"}'
 ```
 
+Jobs can include a `sessionKey` and `resumptionTemplate` to enable agent-to-human-to-agent routing — when you complete an approval job, the dashboard automatically routes your response back to the waiting agent.
+
+> **Note:** For automatic result routing back to the requesting agent, include `sessionKey` and `resumptionTemplate` in the job payload. See `agents/protocols/job-board.md` for the full schema.
+
 **Pushover notifications (optional):** Set `PUSHOVER_TOKEN` and `PUSHOVER_USER` env vars for mobile push on high-priority jobs.
+
+---
+
+## Upgrading
+
+After `git pull`, re-run `setup.sh` to copy updated files to `~/claude-migration/` and `~/claude-agents/workshop/`. The files in this repo are templates — the deployed copies live separately and won't update automatically.
+
+```bash
+git pull
+./setup.sh
+```
 
 ---
 

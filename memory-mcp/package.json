@@ -5,9 +5,9 @@
   "description": "MCP server for SQLite memory databases with hybrid vector+BM25 semantic search",
   "main": "server.mjs",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "better-sqlite3": "^11.0.0",
-    "sqlite-vec-darwin-arm64": "*",
-    "zod": "^3.23.0"
+    "@modelcontextprotocol/sdk": "1.0.4",
+    "better-sqlite3": "11.9.1",
+    "sqlite-vec-darwin-arm64": "0.1.6",
+    "zod": "3.24.2"
   }
 }

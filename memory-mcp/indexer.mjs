@@ -71,7 +71,8 @@ function initDb(db, vecDim) {
       file TEXT NOT NULL,
       chunk_index INTEGER NOT NULL,
       content TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(agent, file, chunk_index)
     );
     CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(content, content=chunks, content_rowid=id);
   `);
@@ -109,18 +110,29 @@ async function indexAgent(agentName) {
   const db = new Database(dbPath);
   initDb(db, vecDim);
 
-  const insertChunk = db.prepare(`INSERT OR IGNORE INTO chunks (agent, file, chunk_index, content) VALUES (?, ?, ?, ?)`);
+  const deleteChunks = db.prepare(`DELETE FROM chunks WHERE agent = ? AND file = ?`);
+  const deleteFts = db.prepare(`DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE agent = ? AND file = ?)`);
+  const insertChunk = db.prepare(`INSERT OR REPLACE INTO chunks (agent, file, chunk_index, content) VALUES (?, ?, ?, ?)`);
   const insertFts = db.prepare(`INSERT INTO chunks_fts(rowid, content) VALUES (?, ?)`);
+  let deleteVec;
   let insertVec;
   try {
+    deleteVec = db.prepare(`DELETE FROM chunks_vec WHERE rowid IN (SELECT id FROM chunks WHERE agent = ? AND file = ?)`);
     insertVec = db.prepare(`INSERT INTO chunks_vec(rowid, embedding) VALUES (?, ?)`);
-  } catch (e) { insertVec = null; }
+  } catch (e) { deleteVec = null; insertVec = null; }
 
   for (const file of files) {
     const filePath = join(memoryDir, file);
     const content = readFileSync(filePath, 'utf8');
     const chunks = chunkText(content);
     console.log(`  ${file}: ${chunks.length} chunks`);
+
+    // Delete existing rows for this (agent, file) to make re-indexing idempotent
+    db.transaction(() => {
+      if (deleteVec) deleteVec.run(agentName, file);
+      deleteFts.run(agentName, file);
+      deleteChunks.run(agentName, file);
+    })();
 
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];

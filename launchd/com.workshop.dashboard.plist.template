@@ -4,9 +4,11 @@
 <dict>
     <key>Label</key>
     <string>com.workshop.dashboard</string>
+    <!-- Run `which node` to find your node path.
+         e.g. /opt/homebrew/bin/node (Apple Silicon) or /usr/local/bin/node (Intel) -->
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/node</string>
+        <string>REPLACE_WITH_YOUR_NODE_PATH</string>
         <string>YOUR_HOME_DIR/claude-agents/workshop-starter/dashboard/workshop-server.js</string>
     </array>
     <key>WorkingDirectory</key>
