@@ -113,12 +113,17 @@ mkdir -p ~/claude-agents/main/{memory,inbox,protocols}/
 mkdir -p ~/.workshop/{memory,secrets,logs,state}/
 mkdir -p ~/.claude/{state,logs}/
 mkdir -p ~/claude-migration/
+mkdir -p ~/.workshop
+if [ ! -f ~/.workshop/jobs.json ]; then
+    echo '{"tasks":[],"archived":[]}' > ~/.workshop/jobs.json
+fi
 
 ok "~/claude-agents/{main,workshop}/"
 ok "~/claude-agents/main/{memory,inbox,protocols}/"
 ok "~/.workshop/{memory,secrets,logs,state}/"
 ok "~/.claude/{state,logs}/"
 ok "~/claude-migration/"
+ok "~/.workshop/jobs.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 3: Copy files from the starter package
@@ -349,5 +354,10 @@ cat <<'NEXTSTEPS'
 7. SEND YOUR FIRST MESSAGE
    → Open Telegram, find your bot
    → Send: "Hello! Read your CLAUDE.md and introduce yourself."
+
+JOB BOARD
+  → Agents can post tasks for your review at http://localhost:3500 (Job Board tab)
+  → Optional Pushover notifications: set PUSHOVER_TOKEN and PUSHOVER_USER env vars
+  → High-priority jobs notify you immediately; others queue for review
 
 NEXTSTEPS

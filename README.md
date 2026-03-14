@@ -143,6 +143,25 @@ The memory directory convention: `YYYY-MM-DD.md` for daily notes, `MEMORY.md` fo
 
 ---
 
+### Job Board
+
+Agents post tasks for human review. You approve, respond, and optionally route answers back to agents automatically.
+
+**Task types:**
+- `manual` — something only you can do (check a file, make a call)
+- `approval` — agent is waiting for your go-ahead, response auto-routes back
+
+**Creating a job from an agent:**
+```bash
+curl -X POST http://localhost:3500/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Review this PR","detail":"...","project":"myapp","priority":"medium","type":"approval","createdBy":"pm-agent"}'
+```
+
+**Pushover notifications (optional):** Set `PUSHOVER_TOKEN` and `PUSHOVER_USER` env vars for mobile push on high-priority jobs.
+
+---
+
 ## License
 
 MIT
