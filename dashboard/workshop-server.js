@@ -37,20 +37,25 @@ function readBotsMap() {
 // Known protocols — loaded from PROJECTS_DIR status files.
 // To customize, populate {key}-status.json files in PROJECTS_DIR,
 // or set WORKSHOP_KNOWN_PROTOCOLS env var as JSON.
-const KNOWN_PROTOCOLS = process.env.WORKSHOP_KNOWN_PROTOCOLS
-  ? JSON.parse(process.env.WORKSHOP_KNOWN_PROTOCOLS)
-  : [
-      { key: 'nightwatch',   name: 'NIGHTWATCH',   desc: 'Autonomous builds' },
-      { key: 'gauntlet',     name: 'GAUNTLET',     desc: 'Error sweep' },
-      { key: 'paramedic',    name: 'PARAMEDIC',    desc: 'Error triage' },
-    ];
+let KNOWN_PROTOCOLS = [
+  { key: 'nightwatch',   name: 'NIGHTWATCH',   desc: 'Autonomous builds' },
+  { key: 'gauntlet',     name: 'GAUNTLET',     desc: 'Error sweep' },
+  { key: 'paramedic',    name: 'PARAMEDIC',    desc: 'Error triage' },
+];
+if (process.env.WORKSHOP_KNOWN_PROTOCOLS) {
+  try {
+    KNOWN_PROTOCOLS = JSON.parse(process.env.WORKSHOP_KNOWN_PROTOCOLS);
+  } catch (e) {
+    console.warn('WORKSHOP_KNOWN_PROTOCOLS is not valid JSON, using defaults');
+  }
+}
 
 // --- Safety ---
 const BLOCKED_PATTERNS = ['config.php', '.env', 'secrets/', 'settings.json', 'settings.local.json'];
 
 function isPathSafe(filePath) {
   const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(AGENTS_DIR)) return false;
+  if (!resolved.startsWith(AGENTS_DIR + path.sep)) return false;
   const lower = resolved.toLowerCase();
   for (const pat of BLOCKED_PATTERNS) {
     if (lower.includes(pat)) return false;

@@ -63,10 +63,10 @@ I only: offer perspective.
 In `bots.json`, set:
 ```json
 {
-  "name": "[HISTORICAL FIGURE]",
-  "agent": "advisor",
-  "dashboardOnly": true,
-  "model": "claude-sonnet-4-6"
+  "name": "feynman",
+  "displayName": "Richard Feynman",
+  "agentDir": "/Users/YOUR_USERNAME/claude-agents/feynman/",
+  "dashboardOnly": true
 }
 ```
 

@@ -22,7 +22,7 @@ Run a team of AI agents from your phone or browser. Each agent has its own ident
 - **Claude Max subscription ($20/month)** — API keys will not work. This system uses Claude Code, not the Anthropic API.
 - Node.js 18+
 - Python 3.10+
-- [Ollama](https://ollama.ai) — for local embeddings (`ollama pull nomic-embed-text`)
+- [Ollama](https://ollama.ai) — for local embeddings (`ollama pull embeddinggemma:300m`)
 - Telegram account — optional. The dashboard works without any bots.
 
 ---
@@ -80,12 +80,12 @@ Copy the relevant template into `~/claude-agents/{yourname}/` and fill in the `C
 [
   {
     "name": "myagent",
-    "token_path": "~/.workshop/tokens/myagent.token",
+    "tokenFile": "~/.workshop/tokens/myagent.token",
     "agent_dir": "~/claude-agents/myagent"
   }
 ]
 ```
-Agents without a `token_path` are dashboard-only (no Telegram polling).
+Agents without a `tokenFile` are dashboard-only (no Telegram polling).
 
 **`WORKSHOP_AGENTS_DIR`** — env var to override the default `~/claude-agents/` root.
 
@@ -107,12 +107,24 @@ Multiple agents can run concurrently. Messages to the *same* agent queue sequent
 
 ---
 
+### Security Note
+
+All agents spawned by the bridge run with **full filesystem and shell access** — no approval prompts. This is required for autonomous operation. It means:
+
+- Only add Telegram users you trust to `allowedUsers` in `bots.json`
+- The dashboard HTTP API has no authentication — only run it on localhost (never expose port 3500 to the network)
+- The bridge API on port 3460 is also localhost-only — do not port-forward it
+
+Your `allowedUsers` list is the only gate for Telegram messages. Treat compromised bot tokens as compromised shell access.
+
+---
+
 ## Adding an Agent
 
 1. Create the directory: `mkdir -p ~/claude-agents/myagent/{memory,inbox}`
 2. Copy a template: `cp -r agents/pm/CLAUDE.md ~/claude-agents/myagent/CLAUDE.md`
 3. Fill in the `CLAUDE.md` (name, role, project context)
-4. Add an entry to `bots.json` (omit `token_path` for dashboard-only)
+4. Add an entry to `bots.json` (omit `tokenFile` for dashboard-only)
 5. Create the memory database: `touch ~/.workshop/memory/myagent.sqlite`
 6. Restart the bridge: `launchctl kickstart -k gui/$(id -u)/com.workshop.bridge`
 

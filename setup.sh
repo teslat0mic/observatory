@@ -181,10 +181,13 @@ fi
 
 # launchd plist templates — copy to a known location, manual install required
 if [ -d "$SCRIPT_DIR/launchd" ]; then
-    mkdir -p ~/claude-agents/workshop-starter/launchd/
-    cp -r "$SCRIPT_DIR/launchd/." ~/claude-agents/workshop-starter/launchd/
-    ok "launchd/*.plist.template → ~/claude-agents/workshop-starter/launchd/"
-    info "To auto-start on login, manually install plist files from that folder (see Step 9)"
+    mkdir -p ~/.workshop/launchd
+    cp "$SCRIPT_DIR"/launchd/*.plist.template ~/.workshop/launchd/
+    ok "launchd/*.plist.template → ~/.workshop/launchd/"
+    info "To auto-start on login, manually install plist files from that folder (see Step 10)"
+    PYTHON_PATH=$(which python3)
+    info "Your Python3 is at: $PYTHON_PATH"
+    info "Edit the launchd plist and replace 'REPLACE_WITH_YOUR_PYTHON3_PATH' with '$PYTHON_PATH'"
 else
     warn "launchd/ not found in package — skipping"
 fi
@@ -194,7 +197,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 section "Step 4: Installing Python dependencies"
 
-pip3 install --quiet claude-agent-sdk
+pip3 install --quiet -r "$SCRIPT_DIR/bridge/requirements.txt"
 ok "claude-agent-sdk installed"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -220,6 +223,18 @@ fi
 # STEP 6: Pull Ollama embedding model
 # ─────────────────────────────────────────────────────────────────────────────
 section "Step 6: Pulling Ollama embedding model"
+
+section "Starting Ollama daemon"
+if ! ollama list &>/dev/null; then
+  info "Starting Ollama in background..."
+  ollama serve &>/dev/null &
+  sleep 3
+  if ! ollama list &>/dev/null; then
+    warn "Ollama daemon didn't start. Try running 'ollama serve' in a separate terminal, then re-run this script."
+    exit 1
+  fi
+fi
+ok "Ollama daemon running"
 
 info "Downloading embeddinggemma:300m (~300MB) — this may take a minute..."
 ollama pull embeddinggemma:300m
@@ -261,7 +276,40 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STEP 9: Print next steps
+# STEP 9: Generate MCP config
+# ─────────────────────────────────────────────────────────────────────────────
+section "Step 9: Generating MCP config"
+MCP_TARGET="$HOME/.claude/.mcp.json"
+MCP_SERVER_PATH="$HOME/claude-migration/memory-mcp/server.mjs"
+
+if [ -f "$MCP_TARGET" ]; then
+  warn "$MCP_TARGET already exists — skipping. Merge manually with the example at: $SCRIPT_DIR/memory-mcp/.mcp.json.example"
+else
+  cat > "$MCP_TARGET" << MCPEOF
+{
+  "mcpServers": {
+    "memory-search": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["$MCP_SERVER_PATH"],
+      "env": {
+        "MEMORY_DIR": "$HOME/.workshop/memory",
+        "VEC_DYLIB": "${VEC_DYLIB:-REPLACE_WITH_PATH_TO_vec0.dylib}",
+        "OLLAMA_URL": "http://localhost:11434/v1/embeddings",
+        "EMBED_MODEL": "embeddinggemma:300m"
+      }
+    }
+  }
+}
+MCPEOF
+  ok "MCP config written to $MCP_TARGET"
+  if [ -z "$VEC_DYLIB" ]; then
+    warn "VEC_DYLIB not found — edit $MCP_TARGET and set the correct path."
+  fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 10: Print next steps
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}✓ Setup complete! Here's what to do next:${RESET}"

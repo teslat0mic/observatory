@@ -867,7 +867,7 @@ async def main():
     # Start HTTP API server
     import socket
     http_server = await asyncio.start_server(
-        handle_http, "0.0.0.0", HTTP_PORT,
+        handle_http, "127.0.0.1", HTTP_PORT,
         reuse_address=True,
         reuse_port=True,
         start_serving=True,
