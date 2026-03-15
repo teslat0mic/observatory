@@ -1,13 +1,13 @@
-# Job Board Protocol
+# Task Queue Protocol
 
-The Job Board is how agents request human input or approval before proceeding.
+The Task Queue is how agents request human input or approval before proceeding.
 
 ## When to use
 - You need the human to make a decision before continuing
 - You need approval to take an external action (send email, deploy, etc.)
 - A task is blocked waiting for information only the human has
 
-## Creating a job
+## Creating a task
 
 POST to http://localhost:3500/api/jobs with:
 ```json
@@ -28,7 +28,7 @@ POST to http://localhost:3500/api/jobs with:
 - **approval** — human reviews and approves, response routes back to you automatically
 
 ## Routing
-If you include `sessionKey` and `resumptionTemplate`, your response will be sent back to you automatically when the human completes the job. Use `{{response}}` in the template where the human's answer should go. Also available: `{{title}}`, `{{project}}`, `{{detail}}`.
+If you include `sessionKey` and `resumptionTemplate`, your response will be sent back to you automatically when the human completes the task. Use `{{response}}` in the template where the human's answer should go. Also available: `{{title}}`, `{{project}}`, `{{detail}}`.
 
 ## Priority
 - **high** — triggers Pushover notification (if configured), use sparingly
