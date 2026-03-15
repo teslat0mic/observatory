@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WORKSHOP COMMAND CENTER</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/augmented.css">
+  <style>
+    :root {
+      --bg:           #030810;
+      --panel-bg:     #070f1c;
+      --panel-border: #1a3a5c;
+      --panel-border-bright: #2a5a8c;
+      --cyan:         #00c8ff;
+      --cyan-dim:     #006888;
+      --green:        #00e87a;
+      --green-dim:    #00502a;
+      --amber:        #ffaa00;
+      --amber-dim:    #664400;
+      --red:          #ff3c3c;
+      --purple:       #a855f7;
+      --purple-dim:   #3d1a6e;
+      --text-dim:     #2a5a7a;
+      --text:         #6aa8c8;
+      --text-bright:  #b8d8f0;
+      --text-white:   #e0f0ff;
+      --idle:         #1a3a5c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.18) 2px,
+        rgba(0, 0, 0, 0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Vignette */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* ─── HEADER ────────────────────────────────────────────── */
+    .hud-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--panel-border);
+      background: linear-gradient(180deg, #0a1828 0%, var(--bg) 100%);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .hud-title {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: 18px;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan), 0 0 40px rgba(0,200,255,0.3);
+      letter-spacing: 3px;
+    }
+
+    .hud-pills {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      padding: 3px 10px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      color: var(--text);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .pill.online  { border-color: var(--green); color: var(--green); text-shadow: 0 0 8px var(--green); }
+    .pill.warning { border-color: var(--amber); color: var(--amber); }
+    .pill.offline { border-color: var(--red);   color: var(--red); }
+    .pill.info    { border-color: var(--cyan);  color: var(--cyan); }
+
+    .refresh-tick {
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* ─── SECTIONS ──────────────────────────────────────────── */
+    .hud-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    .hud-section { display: flex; flex-direction: column; gap: 10px; }
+
+    .section-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 3px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    /* ─── AGENT GRID ────────────────────────────────────────── */
+    .agent-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ─── AGENT CARD ────────────────────────────────────────── */
+    .agent-card {
+      width: 130px;
+      padding: 8px 10px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      cursor: default;
+      transition: border-color 0.3s, box-shadow 0.3s;
+      position: relative;
+      --aug-border-bg: var(--panel-border);
+    }
+
+    .agent-card:hover {
+      border-color: var(--panel-border-bright);
+      box-shadow: 0 0 12px rgba(0, 100, 200, 0.15);
+    }
+
+    .agent-card.state-active {
+      border-color: var(--green);
+      box-shadow: 0 0 16px rgba(0, 232, 122, 0.2), inset 0 0 20px rgba(0, 232, 122, 0.04);
+      --aug-border-bg: var(--green);
+    }
+
+    .agent-card.state-warm {
+      border-color: var(--amber);
+      box-shadow: 0 0 10px rgba(255, 170, 0, 0.15);
+    }
+
+    .agent-card.state-queued {
+      border-color: var(--amber);
+      box-shadow: 0 0 10px rgba(255, 170, 0, 0.2);
+      animation: queued-pulse 2s ease-in-out infinite;
+    }
+
+    .agent-card.state-ollama {
+      border-color: var(--purple-dim);
+    }
+
+    .agent-card.state-ollama.state-active {
+      border-color: var(--purple);
+      box-shadow: 0 0 16px rgba(168, 85, 247, 0.25);
+    }
+
+    /* Portrait */
+    .agent-portrait {
+      width: 100%;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: 16px;
+      margin-bottom: 6px;
+      background: rgba(0,0,0,0.3);
+      letter-spacing: 1px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .agent-portrait::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
+    }
+
+    .agent-name {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--text-bright);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .agent-status-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 4px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.active  { background: var(--green);  box-shadow: 0 0 6px var(--green);  animation: dot-pulse 1.5s ease-in-out infinite; }
+    .status-dot.warm    { background: var(--amber);  box-shadow: 0 0 4px var(--amber); }
+    .status-dot.queued  { background: var(--amber);  box-shadow: 0 0 6px var(--amber); animation: dot-pulse 1s ease-in-out infinite; }
+    .status-dot.idle    { background: var(--text-dim); }
+    .status-dot.dormant { background: #1a2a3a; }
+    .status-dot.ollama  { background: var(--purple); box-shadow: 0 0 4px var(--purple); }
+
+    .status-label {
+      font-size: 10px;
+      letter-spacing: 1px;
+    }
+
+    .status-label.active  { color: var(--green); }
+    .status-label.warm    { color: var(--amber); }
+    .status-label.queued  { color: var(--amber); }
+    .status-label.idle    { color: var(--text-dim); }
+    .status-label.dormant { color: #1a2a3a; }
+
+    .agent-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    .badge-tg   { color: var(--cyan);   font-size: 9px; }
+    .badge-ol   { color: var(--purple); font-size: 9px; }
+    .badge-dash { color: var(--text-dim); font-size: 9px; }
+
+    .time-ago { font-size: 9px; color: var(--text-dim); }
+
+    /* Inbox indicator */
+    .inbox-badge {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: var(--amber);
+      color: #000;
+      font-size: 8px;
+      font-weight: bold;
+      padding: 1px 4px;
+      font-family: 'Orbitron', monospace;
+    }
+
+    /* ─── BOTTOM STATUS ROW ─────────────────────────────────── */
+    .hud-bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    .status-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      padding: 12px 14px;
+    }
+
+    .panel-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+      font-size: 11px;
+    }
+
+    .stat-row .label { color: var(--text); }
+    .stat-row .value { color: var(--text-bright); font-family: 'Share Tech Mono', monospace; }
+    .stat-row .value.green  { color: var(--green); }
+    .stat-row .value.cyan   { color: var(--cyan); }
+    .stat-row .value.amber  { color: var(--amber); }
+    .stat-row .value.purple { color: var(--purple); }
+    .stat-row .value.red    { color: var(--red); }
+
+    /* Activity bar */
+    .activity-bar {
+      margin-top: 8px;
+      height: 3px;
+      background: var(--panel-border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .activity-fill {
+      height: 100%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      transition: width 0.5s ease;
+    }
+
+    /* ─── ANIMATIONS ────────────────────────────────────────── */
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    @keyframes queued-pulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(255, 170, 0, 0.2); }
+      50%       { box-shadow: 0 0 20px rgba(255, 170, 0, 0.4); }
+    }
+
+    @keyframes active-glow {
+      0%, 100% { box-shadow: 0 0 16px rgba(0, 232, 122, 0.2); }
+      50%       { box-shadow: 0 0 28px rgba(0, 232, 122, 0.4); }
+    }
+
+    .agent-card.state-active { animation: active-glow 2s ease-in-out infinite; }
+
+    /* Divider line */
+    .hud-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, var(--panel-border) 20%, var(--panel-border) 80%, transparent 100%);
+    }
+
+    /* Error / offline state */
+    .offline-msg {
+      color: var(--red);
+      font-size: 11px;
+      padding: 8px;
+    }
+
+    /* Last updated indicator */
+    .last-updated { font-size: 10px; color: var(--text-dim); }
+    .last-updated.stale { color: var(--amber); }
+
+    /* ─── PROTOCOL CARDS ────────────────────────────────────── */
+    .protocol-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .protocol-card {
+      flex: 1;
+      min-width: 110px;
+      max-width: 180px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      padding: 10px 12px;
+    }
+
+    .proto-name {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+
+    .proto-status-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 5px;
+    }
+
+    .proto-summary {
+      font-size: 9px;
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 3px;
+    }
+
+    .proto-meta { font-size: 9px; color: var(--text-dim); }
+
+    /* ─── CRON TABLE ─────────────────────────────────────────── */
+    .cron-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .cron-table th {
+      text-align: left;
+      color: var(--text-dim);
+      font-family: 'Orbitron', monospace;
+      font-size: 9px;
+      letter-spacing: 1px;
+      padding: 3px 10px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .cron-table td {
+      padding: 3px 10px;
+      border-bottom: 1px solid rgba(26,58,92,0.3);
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .cron-table td:first-child { color: var(--text-bright); }
+
+    .cron-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    .cron-dot.running { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .cron-dot.stopped { background: var(--text-dim); }
+    .cron-dot.error   { background: var(--red); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hud-bottom { grid-template-columns: 1fr; }
+      .hud-title  { font-size: 14px; }
+    }
+
+    /* ─── 24H SCHEDULE TIMELINE ──────────────────────────────── */
+    .tl-outer { position: relative; padding: 4px 0 4px; }
+
+    /* Track: holds bar, ticks, job markers, now-cursor */
+    .tl-track {
+      position: relative;
+      height: 110px;
+      margin-bottom: 4px;
+    }
+
+    /* The horizontal bar */
+    .tl-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan-dim) 0%, var(--panel-border) 60%, var(--text-dim) 100%);
+    }
+
+    /* Hour tick marks */
+    .tl-tick {
+      position: absolute;
+      bottom: 0;
+      width: 1px;
+      height: 6px;
+      background: var(--panel-border);
+    }
+    .tl-tick.major { height: 10px; background: var(--panel-border-bright); }
+
+    /* Current time cursor */
+    .tl-now {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 1px;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan), 0 0 16px rgba(0,200,255,0.3);
+      z-index: 10;
+      pointer-events: none;
+    }
+    .tl-now::after {
+      content: '▼';
+      position: absolute;
+      bottom: -11px;
+      left: -4px;
+      font-size: 8px;
+      color: var(--cyan);
+      text-shadow: 0 0 6px var(--cyan);
+    }
+
+    /* Job markers */
+    .tl-job {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transform: translateX(-50%);
+      cursor: default;
+      z-index: 4;
+      transition: opacity 0.2s;
+    }
+    .tl-job:hover { z-index: 20; }
+
+    .tl-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: transform 0.15s;
+    }
+    .tl-job:hover .tl-dot { transform: scale(1.5); }
+
+    .tl-dot.ok     { background: var(--green);    box-shadow: 0 0 5px var(--green); }
+    .tl-dot.fail   { background: var(--red);      box-shadow: 0 0 5px var(--red); }
+    .tl-dot.never  { background: var(--text-dim); border: 1px solid var(--panel-border-bright); }
+    .tl-dot.active { background: var(--amber);    box-shadow: 0 0 5px var(--amber); animation: dot-pulse 1s ease-in-out infinite; }
+
+    .tl-name {
+      font-size: 8px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      transform: rotate(180deg);
+      height: 44px;
+      overflow: hidden;
+      letter-spacing: 0.5px;
+    }
+    .tl-job:hover .tl-name { color: var(--cyan); }
+
+    /* Hour label strip */
+    .tl-hours {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+      padding: 0 0 2px;
+      font-family: 'Share Tech Mono', monospace;
+    }
+    .tl-hour-lbl.now {
+      color: var(--cyan);
+      text-shadow: 0 0 6px var(--cyan);
+    }
+
+    /* Lower grid: intervals + daemons */
+    .sched-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .sched-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      padding: 10px 12px;
+    }
+
+    .sched-panel-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .sched-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 0;
+      font-size: 10px;
+      color: var(--text);
+    }
+
+    .sched-name     { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sched-interval { color: var(--text-dim); font-size: 9px; white-space: nowrap; }
+
+    .sched-dot        { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .sched-dot.ok     { background: var(--green); box-shadow: 0 0 3px var(--green); }
+    .sched-dot.fail   { background: var(--red);   box-shadow: 0 0 3px var(--red); }
+    .sched-dot.never  { background: var(--text-dim); border: 1px solid var(--panel-border-bright); }
+    .sched-dot.active { background: var(--amber);  box-shadow: 0 0 3px var(--amber); animation: dot-pulse 1s ease-in-out infinite; }
+    .sched-dot.daemon { background: var(--cyan);   box-shadow: 0 0 3px var(--cyan); animation: dot-pulse 2s ease-in-out infinite; }
+    .sched-dot.dead   { background: var(--red);    box-shadow: 0 0 3px var(--red); }
+
+    .cron-btn { font-size: 9px; padding: 2px 8px; border: 1px solid; cursor: pointer;
+                font-family: 'Share Tech Mono', monospace; background: transparent; letter-spacing: 1px; }
+    .cron-btn.stop  { border-color: var(--red); color: var(--red); }
+    .cron-btn.start { border-color: var(--green); color: var(--green); }
+    .cron-btn:hover { background: rgba(255,255,255,0.05); }
+    .cron-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* ─── SKILLS INVENTORY ──────────────────────────────────────── */
+    .skill-agent-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(26,58,92,0.3);
+    }
+    .skill-agent-row:last-child { border-bottom: none; }
+    .skill-agent-name {
+      font-size: 10px;
+      color: var(--text-bright);
+      letter-spacing: 1px;
+      min-width: 110px;
+      flex-shrink: 0;
+    }
+    .skill-chip {
+      font-size: 9px;
+      padding: 2px 7px;
+      border: 1px solid var(--cyan-dim);
+      color: var(--cyan);
+      letter-spacing: 0.5px;
+      font-family: 'Share Tech Mono', monospace;
+    }
+    .skill-chip.global {
+      border-color: var(--text-dim);
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="hud-header">
+    <div class="hud-title">◈ WORKSHOP COMMAND CENTER</div>
+    <div class="hud-pills">
+      <span class="pill" id="pill-bridge">BRIDGE: ...</span>
+      <span class="pill info"   id="pill-queue">QUEUE: —</span>
+      <span class="pill info"   id="pill-agents">AGENTS: —</span>
+      <span class="pill info"   id="pill-tasks">TASKS: —</span>
+      <span class="pill"        id="pill-uptime">UP: —</span>
+      <span class="last-updated" id="last-updated">—</span>
+      <span class="refresh-tick" id="refresh-tick">↻</span>
+    </div>
+  </header>
+
+  <div class="hud-body">
+
+    <!-- CLAUDE AGENTS -->
+    <div class="hud-section">
+      <div class="section-label">◈ CLAUDE AGENTS</div>
+      <div class="agent-grid" id="grid-claude">
+        <div class="offline-msg">Loading...</div>
+      </div>
+    </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- LOCAL LLM FLEET -->
+    <div class="hud-section">
+      <div class="section-label">◈ LOCAL LLM FLEET</div>
+      <div class="agent-grid" id="grid-ollama">
+        <div class="offline-msg">Loading...</div>
+      </div>
+    </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- BOTTOM STATUS PANELS -->
+    <div class="hud-bottom">
+
+      <div class="status-panel" data-augmented-ui="tl-clip br-clip border">
+        <div class="panel-label">◈ TASK QUEUE (PTD)</div>
+        <div id="ptd-content">
+          <div class="stat-row"><span class="label">Loading...</span></div>
+        </div>
+      </div>
+
+      <div class="status-panel" data-augmented-ui="tl-clip br-clip border">
+        <div class="panel-label">◈ BRIDGE HEALTH</div>
+        <div id="bridge-content">
+          <div class="stat-row"><span class="label">Loading...</span></div>
+        </div>
+      </div>
+
+      <div class="status-panel" data-augmented-ui="tl-clip br-clip border">
+        <div class="panel-label">◈ INBOX ALERTS</div>
+        <div id="inbox-content">
+          <div class="stat-row"><span class="label">Loading...</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- PROTOCOLS -->
+    <div class="hud-section">
+      <div class="section-label">◈ PROTOCOLS</div>
+      <div class="protocol-row" id="protocol-row">
+        <div class="offline-msg">Loading...</div>
+      </div>
+    </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- SKILLS INVENTORY -->
+    <div class="hud-section">
+      <div class="section-label">◈ SKILL INVENTORY</div>
+      <div id="skills-content">
+        <div class="offline-msg">Loading...</div>
+      </div>
+    </div>
+
+    <div class="hud-divider"></div>
+
+    <!-- 24H SCHEDULE TIMELINE -->
+    <div class="hud-section">
+      <div class="section-label">◈ 24H SCHEDULE</div>
+      <div class="tl-outer">
+        <div class="tl-track" id="tl-track"></div>
+        <div class="tl-hours" id="tl-hours"></div>
+      </div>
+      <div class="sched-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="sched-panel">
+          <div class="sched-panel-label">INTERVAL JOBS</div>
+          <div id="sched-intervals"><div class="offline-msg">Loading...</div></div>
+        </div>
+        <div class="sched-panel">
+          <div class="sched-panel-label">SCHEDULED JOBS</div>
+          <div id="sched-calendar"><div class="offline-msg">Loading...</div></div>
+        </div>
+        <div class="sched-panel">
+          <div class="sched-panel-label">DAEMONS</div>
+          <div id="sched-daemons"><div class="offline-msg">Loading...</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+// ─── CONFIG ─────────────────────────────────────────────────────
+const WORKSHOP_API    = 'http://localhost:3500/api/agents';
+const BRIDGE_AGENTS   = 'http://localhost:3460/api/agents';
+const BRIDGE_HEALTH   = 'http://localhost:3460/api/health';
+const PTD_API         = 'http://localhost:3333/api/tasks';
+const PROTOCOLS_API   = 'http://localhost:3500/api/protocols';
+const CRONS_API       = 'http://localhost:3500/api/crons';
+const SKILLS_API      = 'http://localhost:3500/api/skills';
+const POLL_MS         = 5000;
+
+// Activity thresholds (seconds)
+const ACTIVE_THRESH  = 60;
+const WARM_THRESH    = 300;
+const STALE_THRESH   = 15; // seconds before "last updated" goes amber
+
+// ─── STATE ──────────────────────────────────────────────────────
+const state = { agents: [], lastSuccessMs: null };
+let visualTickInterval = null;
+
+// ─── HELPERS ────────────────────────────────────────────────────
+
+// HTML-encode user/API-supplied strings before injecting into innerHTML
+function h(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Fetch with r.ok guard — throws on HTTP errors
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status} from ${url}`);
+  return r.json();
+}
+
+function secsAgo(isoStr) {
+  if (!isoStr) return Infinity;
+  return (Date.now() - new Date(isoStr).getTime()) / 1000;
+}
+
+function fmtAgo(secs) {
+  if (!isFinite(secs) || secs > 86400 * 30) return 'dormant';
+  if (secs < 60)   return Math.round(secs) + 's ago';
+  if (secs < 3600) return Math.round(secs / 60) + 'm ago';
+  if (secs < 86400) return Math.round(secs / 3600) + 'h ago';
+  return Math.round(secs / 86400) + 'd ago';
+}
+
+function fmtUptime(secs) {
+  if (!secs) return '—';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function agentState(agent) {
+  const secs = secsAgo(agent.lastActive);
+  if (agent.ollamaModel) {
+    if (secs < ACTIVE_THRESH) return 'active';
+    return 'ollama';
+  }
+  if (agent.inboxCount > 0)  return 'queued';
+  if (secs < ACTIVE_THRESH)  return 'active';
+  if (secs < WARM_THRESH)    return 'warm';
+  if (secs < 86400 * 7)      return 'idle';
+  return 'dormant';
+}
+
+// Map agent name → 2-char portrait abbreviation
+function agentInitials(name) {
+  const map = {
+    main: 'P🩹', patch: 'P🩹',
+    charis: 'CH', sterling: 'ST', aegis: 'AE',
+    paramedic: 'RX', artist: 'AR', plates: 'PL',
+    praxis: 'PR', sous: 'SG', solarknight: 'SK',
+    echos: 'EC', dbeatz: 'DB', chrysalis: 'CR',
+    personaplex: 'PP', 'patrick-clone': 'PC',
+    'emulator-tester': 'ET', 'record-keeper': 'RK',
+    workshop: 'WS', 'local-llm': 'LL',
+    'runpod-specialist': 'RP', runpod: 'RD',
+    researcher: 'RS', pentest: 'PT',
+    'artscout-pm': 'AS', 'createbook-pm': 'CB',
+    joshuassoul: 'JS', munger: 'MU',
+    torvalds: 'LT', taleb: 'NT', hormozi: 'AH',
+    graham: 'PG', feynman: 'RF', ogilvy: 'DO',
+    naval: 'NR', rams: 'DR', herzog: 'WH',
+  };
+  return map[name] || name.slice(0, 2).toUpperCase();
+}
+
+// Portrait color based on state
+function portraitColor(s) {
+  return {
+    active:  '#003a1a',
+    warm:    '#2a1a00',
+    queued:  '#2a1a00',
+    ollama:  '#1a0a30',
+    idle:    '#060e18',
+    dormant: '#050a10',
+  }[s] || '#060e18';
+}
+
+function portraitTextColor(s) {
+  return {
+    active:  '#00e87a',
+    warm:    '#ffaa00',
+    queued:  '#ffaa00',
+    ollama:  '#a855f7',
+    idle:    '#1a3a5c',
+    dormant: '#0a1a2a',
+  }[s] || '#1a3a5c';
+}
+
+// ─── RENDER: AGENT CARD ─────────────────────────────────────────
+function renderCard(agent) {
+  const s    = agentState(agent);
+  const secs = secsAgo(agent.lastActive);
+  const ini  = agentInitials(agent.name);
+  const isOllama = !!agent.ollamaModel;
+
+  const cardClass = ['agent-card', `state-${s}`, isOllama ? 'state-ollama' : ''].join(' ').trim();
+
+  const dotClass   = { active:'active', warm:'warm', queued:'queued', ollama:'ollama', idle:'idle', dormant:'dormant' }[s] || 'dormant';
+  const statLabel  = { active:'ACTIVE', warm:'WARM', queued:'QUEUED', ollama:'IDLE', idle:'IDLE', dormant:'---' }[s] || '---';
+
+  const badge = isOllama
+    ? `<span class="badge-ol">OLLAMA</span>`
+    : agent.hasTelegram
+      ? `<span class="badge-tg">TG</span>`
+      : `<span class="badge-dash">API</span>`;
+
+  const inboxBadge = (agent.inboxCount > 0)
+    ? `<div class="inbox-badge">${agent.inboxCount}</div>`
+    : '';
+
+  return `
+    <div class="${cardClass}" data-augmented-ui="tl-clip br-clip border" title="${h(agent.name)} | last active: ${h(fmtAgo(secs))}">
+      ${inboxBadge}
+      <div class="agent-portrait" style="background:${portraitColor(s)};color:${portraitTextColor(s)}">
+        ${h(ini)}
+      </div>
+      <div class="agent-name">${h(agent.name)}</div>
+      <div class="agent-status-row">
+        <div class="status-dot ${dotClass}"></div>
+        <span class="status-label ${dotClass}">${h(statLabel)}</span>
+      </div>
+      <div class="agent-meta">
+        <span class="time-ago">${h(isFinite(secs) ? fmtAgo(secs) : '—')}</span>
+        ${badge}
+      </div>
+    </div>`;
+}
+
+// ─── RENDER: ALL AGENTS ──────────────────────────────────────────
+function renderAgents(agents) {
+  const claude = agents.filter(a => !a.ollamaModel);
+  const ollama = agents.filter(a => a.ollamaModel);
+
+  // Sort: active first, then warm, then idle/dormant
+  const stateOrder = { active: 0, warm: 1, queued: 0, ollama: 2, idle: 3, dormant: 4 };
+  const sort = (arr) => arr.sort((a, b) => (stateOrder[agentState(a)] || 99) - (stateOrder[agentState(b)] || 99));
+
+  document.getElementById('grid-claude').innerHTML = sort(claude).map(renderCard).join('') || '<div class="offline-msg">No agents</div>';
+  document.getElementById('grid-ollama').innerHTML = sort(ollama).map(renderCard).join('') || '<div class="offline-msg">No local models</div>';
+
+  // Header pills
+  const activeCount = agents.filter(a => agentState(a) === 'active').length;
+  document.getElementById('pill-agents').textContent = `AGENTS: ${agents.length} · ${activeCount} ACTIVE`;
+  document.getElementById('pill-agents').className = 'pill ' + (activeCount > 0 ? 'online' : 'info');
+}
+
+// ─── RENDER: BRIDGE HEALTH ───────────────────────────────────────
+function renderBridgeHealth(h) {
+  if (!h) {
+    document.getElementById('bridge-content').innerHTML = '<div class="offline-msg">BRIDGE OFFLINE</div>';
+    document.getElementById('pill-bridge').textContent = 'BRIDGE: OFFLINE';
+    document.getElementById('pill-bridge').className = 'pill offline';
+    document.getElementById('pill-queue').textContent = 'QUEUE: —';
+    document.getElementById('pill-uptime').textContent = 'UP: —';
+    return;
+  }
+
+  const qd = h.queue_depth || 0;
+  document.getElementById('pill-bridge').textContent = 'BRIDGE: ONLINE';
+  document.getElementById('pill-bridge').className = 'pill online';
+  document.getElementById('pill-queue').textContent = `QUEUE: ${qd}`;
+  document.getElementById('pill-queue').className = 'pill ' + (qd > 0 ? 'warning' : 'info');
+  document.getElementById('pill-uptime').textContent = `UP: ${fmtUptime(h.uptime_s)}`;
+
+  document.getElementById('bridge-content').innerHTML = `
+    <div class="stat-row"><span class="label">Status</span><span class="value green">ONLINE</span></div>
+    <div class="stat-row"><span class="label">Queue depth</span><span class="value ${qd > 0 ? 'amber' : 'cyan'}">${qd}</span></div>
+    <div class="stat-row"><span class="label">Bots</span><span class="value">${h.bots || '—'}</span></div>
+    <div class="stat-row"><span class="label">Uptime</span><span class="value">${fmtUptime(h.uptime_s)}</span></div>
+    <div class="activity-bar"><div class="activity-fill" style="width:${Math.min(100, (qd/5)*100)}%"></div></div>
+  `;
+}
+
+// ─── RENDER: PTD TASKS ───────────────────────────────────────────
+function renderTasks(tasks) {
+  if (!tasks || !Array.isArray(tasks)) {
+    document.getElementById('ptd-content').innerHTML = '<div class="offline-msg">PTD OFFLINE</div>';
+    document.getElementById('pill-tasks').textContent = 'TASKS: —';
+    return;
+  }
+
+  const pending   = tasks.filter(t => t.status === 'pending');
+  const outreach  = pending.filter(t => t.type === 'outreach').length;
+  const manual    = pending.filter(t => t.type === 'manual').length;
+  const decision  = pending.filter(t => t.type === 'decision').length;
+  const total     = pending.length;
+
+  document.getElementById('pill-tasks').textContent = `TASKS: ${total}`;
+  document.getElementById('pill-tasks').className = 'pill ' + (total > 0 ? 'warning' : 'info');
+
+  document.getElementById('ptd-content').innerHTML = `
+    <div class="stat-row"><span class="label">Total pending</span><span class="value ${total > 0 ? 'amber' : 'green'}">${total}</span></div>
+    <div class="stat-row"><span class="label">Outreach drafts</span><span class="value purple">${outreach}</span></div>
+    <div class="stat-row"><span class="label">Manual tasks</span><span class="value cyan">${manual}</span></div>
+    <div class="stat-row"><span class="label">Decisions</span><span class="value amber">${decision}</span></div>
+    <div class="activity-bar"><div class="activity-fill" style="width:${Math.min(100,(total/50)*100)}%;background:var(--purple)"></div></div>
+  `;
+}
+
+// ─── RENDER: PROTOCOLS ───────────────────────────────────────────
+function renderProtocols(protocols) {
+  const el = document.getElementById('protocol-row');
+  if (!protocols || !protocols.length) { el.innerHTML = '<div class="offline-msg">No data</div>'; return; }
+
+  const COLOR = { done:'var(--green)', running:'var(--amber)', failed:'var(--red)', never:'var(--text-dim)', planned:'var(--purple-dim)' };
+  const LABEL = { done:'DONE', running:'RUNNING', failed:'FAILED', never:'NEVER RAN', planned:'PLANNED' };
+  const DOT   = { done:'active', running:'queued', failed:'', never:'dormant', planned:'dormant' };
+
+  el.innerHTML = protocols.map(p => {
+    const col = COLOR[p.status] || 'var(--text-dim)';
+    const lbl = LABEL[p.status] || p.status.toUpperCase();
+    const dc  = DOT[p.status] || 'dormant';
+    const ago = p.last_run ? fmtAgo(secsAgo(p.last_run)) : '—';
+    const dotExtra = p.status === 'failed' ? ' style="background:var(--red);box-shadow:0 0 4px var(--red)"' : '';
+    return `
+      <div class="protocol-card" data-augmented-ui="tl-clip br-clip border">
+        <div class="proto-name">${h(p.name)}</div>
+        <div class="proto-status-row">
+          <div class="status-dot ${dc}"${dotExtra}></div>
+          <span style="font-size:10px;letter-spacing:1px;color:${col}">${h(lbl)}</span>
+        </div>
+        <div class="proto-summary" title="${h(p.summary || '')}">${h(p.summary || p.desc || '—')}</div>
+        <div class="proto-meta">${h(ago)}</div>
+      </div>`;
+  }).join('');
+}
+
+// ─── RENDER: SKILLS INVENTORY ────────────────────────────────────
+function renderSkills(data) {
+  const el = document.getElementById('skills-content');
+  if (!data) { el.innerHTML = '<div class="offline-msg">Unavailable</div>'; return; }
+
+  const { global: globalSkills = [], agents = [] } = data;
+  let html = '';
+
+  if (globalSkills.length > 0) {
+    const chips = globalSkills.map(s => `<span class="skill-chip global">/${h(s)}</span>`).join('');
+    html += `<div class="skill-agent-row"><span class="skill-agent-name">GLOBAL</span>${chips}</div>`;
+  }
+
+  for (const agent of agents) {
+    const chips = agent.skills.map(s => `<span class="skill-chip">/${h(s)}</span>`).join('');
+    html += `<div class="skill-agent-row"><span class="skill-agent-name">${h(agent.name)}</span>${chips}</div>`;
+  }
+
+  el.innerHTML = html || '<div style="color:var(--text-dim);font-size:10px">No skills registered</div>';
+}
+
+// ─── RENDER: 24H SCHEDULE TIMELINE ──────────────────────────────
+const TL_ABBR = {
+  'accountant':            'ACT',
+  'aegis-session1':        'AE1',
+  'aegis-session2':        'AE2',
+  'aegis-session3':        'AE3',
+  'weekly-self-review':    'WSR',
+  'gauntlet-daily':        'GAU',
+  'paramedic-daily':       'MED',
+  'lantern':               'LNT',
+  'sterling-daily-drafts': 'STD',
+  'sterling-fetch-replies':'SF·',
+  'sterling-reply-triage': 'ST·',
+  'aegis-mandate-audit':   'AMA',
+};
+
+function cronDotClass(c) {
+  if (c.running && !c.keepAlive) return 'active';
+  if (c.lastExit === 0) return 'ok';
+  if (c.lastExit !== null) return 'fail';
+  return 'never';
+}
+
+function renderSchedule(crons) {
+  if (!crons || !crons.length) return;
+
+  const now     = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const nowPct  = (nowMins / 1440) * 100;
+  const nowH    = now.getHours();
+
+  const calJobs      = crons.filter(c => c.scheduleType === 'calendar');
+  const intervalJobs = crons.filter(c => c.scheduleType === 'interval');
+  const daemons      = crons.filter(c => c.scheduleType === 'daemon' || (c.keepAlive && c.scheduleType !== 'interval' && c.scheduleType !== 'calendar'));
+
+  // One marker entry per calendarTime per job
+  const markers = [];
+  for (const cron of calJobs) {
+    const times = cron.calendarTimes && cron.calendarTimes.length
+      ? cron.calendarTimes
+      : (() => { const m = (cron.scheduleHuman || '').match(/(\d+):(\d+)/); return m ? [{ hour: +m[1], minute: +m[2], weekday: null }] : []; })();
+    for (const ct of times) {
+      markers.push({ cron, hour: ct.hour, minute: ct.minute || 0, weekday: ct.weekday });
+    }
+  }
+  markers.sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
+
+  // Stack offset: jobs in same hour go up in increments
+  const hourIdx = {};
+  for (const m of markers) {
+    const k = m.hour;
+    m.stackOffset = (hourIdx[k] || 0) * 11;
+    hourIdx[k] = (hourIdx[k] || 0) + 1;
+  }
+
+  // Build track HTML
+  const trackEl = document.getElementById('tl-track');
+  const hoursEl = document.getElementById('tl-hours');
+  if (!trackEl || !hoursEl) return;
+
+  let html = '<div class="tl-bar"></div>';
+
+  // Tick marks (major every 4h, minor every 2h)
+  for (let hr = 0; hr <= 24; hr += 2) {
+    const pct = (hr / 24 * 100).toFixed(2);
+    const maj = hr % 4 === 0 ? ' major' : '';
+    html += `<div class="tl-tick${maj}" style="left:${pct}%"></div>`;
+  }
+
+  // Job markers
+  for (const m of markers) {
+    const pct   = ((m.hour * 60 + m.minute) / 1440 * 100).toFixed(2);
+    const abbr  = TL_ABBR[m.cron.name] || m.cron.name.slice(0, 3).toUpperCase();
+    const dc    = cronDotClass(m.cron);
+    const wkTag = (m.weekday !== null && m.weekday !== undefined)
+      ? ['Su','Mo','Tu','We','Th','Fr','Sa'][m.weekday] : '';
+    const ttip  = [
+      m.cron.name,
+      (wkTag ? wkTag + ' ' : '') + String(m.hour).padStart(2,'0') + ':' + String(m.minute).padStart(2,'0'),
+      'exit: ' + (m.cron.lastExit !== null ? m.cron.lastExit : '—'),
+      m.cron.lastRunTs ? 'log: ' + new Date(m.cron.lastRunTs).toLocaleTimeString() : '',
+    ].filter(Boolean).join(' · ');
+    html += `<div class="tl-job" style="left:${pct}%;bottom:${8 + m.stackOffset}px" title="${h(ttip)}">
+      <span class="tl-name">${h(abbr + (wkTag ? '·' + wkTag : ''))}</span>
+      <div class="tl-dot ${dc}"></div>
+    </div>`;
+  }
+
+  // Now cursor (rendered last so it's on top)
+  html += `<div class="tl-now" style="left:${nowPct.toFixed(2)}%"></div>`;
+  trackEl.innerHTML = html;
+
+  // Hour labels
+  hoursEl.innerHTML = [0,2,4,6,8,10,12,14,16,18,20,22].map(hr => {
+    const on = nowH >= hr && nowH < hr + 2;
+    return `<span class="tl-hour-lbl${on ? ' now' : ''}">${String(hr).padStart(2,'0')}</span>`;
+  }).join('');
+
+  // Helper: render stop/start button
+  function cronBtn(c) {
+    const isDaemon = c.keepAlive || c.scheduleType === 'daemon';
+    if (c.loaded) {
+      return `<button class="cron-btn stop" onclick="cronAction('${h(c.name)}','stop',${isDaemon})">STOP</button>`;
+    }
+    return `<button class="cron-btn start" onclick="cronAction('${h(c.name)}','start',false)">START</button>`;
+  }
+
+  // Interval jobs panel
+  const intEl = document.getElementById('sched-intervals');
+  if (intEl) {
+    intEl.innerHTML = intervalJobs.map(c => `
+      <div class="sched-row">
+        <div class="sched-dot ${cronDotClass(c)}"></div>
+        <span class="sched-name">${h(c.name)}</span>
+        <span class="sched-interval">${h(c.scheduleHuman)}</span>
+        ${cronBtn(c)}
+      </div>`).join('') || '<div style="color:var(--text-dim);font-size:10px">—</div>';
+  }
+
+  // Calendar jobs panel
+  const calEl = document.getElementById('sched-calendar');
+  if (calEl) {
+    calEl.innerHTML = calJobs.map(c => `
+      <div class="sched-row">
+        <div class="sched-dot ${cronDotClass(c)}"></div>
+        <span class="sched-name">${h(c.name)}</span>
+        <span class="sched-interval">${h(c.scheduleHuman)}</span>
+        ${cronBtn(c)}
+      </div>`).join('') || '<div style="color:var(--text-dim);font-size:10px">—</div>';
+  }
+
+  // Daemons panel
+  const dmEl = document.getElementById('sched-daemons');
+  if (dmEl) {
+    dmEl.innerHTML = daemons.map(c => {
+      const dc  = c.running ? 'daemon' : 'dead';
+      const txt = c.running ? 'RUNNING' : 'DOWN';
+      const col = c.running ? 'var(--cyan)' : 'var(--red)';
+      return `<div class="sched-row">
+        <div class="sched-dot ${dc}"></div>
+        <span class="sched-name">${h(c.name)}</span>
+        <span class="sched-interval" style="color:${col}">${txt}</span>
+        ${cronBtn(c)}
+      </div>`;
+    }).join('') || '<div style="color:var(--text-dim);font-size:10px">—</div>';
+  }
+}
+
+// ─── RENDER: INBOX ALERTS ────────────────────────────────────────
+function renderInbox(agents) {
+  const queued = agents.filter(a => (a.inboxCount || 0) > 0);
+
+  if (queued.length === 0) {
+    document.getElementById('inbox-content').innerHTML = `
+      <div class="stat-row"><span class="label">All inboxes</span><span class="value green">CLEAR</span></div>
+    `;
+    return;
+  }
+
+  const rows = queued.map(a =>
+    `<div class="stat-row"><span class="label">${h(a.name)}</span><span class="value amber">${h(String(a.inboxCount))} msg${a.inboxCount > 1 ? 's' : ''}</span></div>`
+  ).join('');
+
+  document.getElementById('inbox-content').innerHTML = rows;
+}
+
+// ─── CRON STOP/START ─────────────────────────────────────────────
+async function cronAction(name, action, isDaemon) {
+  if (isDaemon && action === 'stop') {
+    if (!confirm(`Stop daemon "${name}"? It will stay down until manually started.`)) return;
+  }
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  try {
+    const res = await fetch(`/api/crons/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) alert(data.error || 'Failed');
+  } catch (e) {
+    alert('Request failed: ' + e.message);
+  }
+  await fetchAll();
+}
+
+// ─── FETCH + UPDATE ──────────────────────────────────────────────
+let nextPollAt = Date.now() + POLL_MS;
+
+async function fetchAll() {
+  const results = await Promise.allSettled([
+    fetchJSON(WORKSHOP_API),
+    fetchJSON(BRIDGE_AGENTS),
+    fetchJSON(BRIDGE_HEALTH),
+    fetchJSON(PTD_API),
+    fetchJSON(PROTOCOLS_API),
+    fetchJSON(CRONS_API),
+    fetchJSON(SKILLS_API),
+  ]);
+
+  const workshopData = results[0].status === 'fulfilled' ? results[0].value : null;
+  const bridgeAgents = results[1].status === 'fulfilled' ? results[1].value : [];
+  const bridgeHealth = results[2].status === 'fulfilled' ? results[2].value : null;
+  const tasks        = results[3].status === 'fulfilled' ? results[3].value : null;
+  const protocols    = results[4].status === 'fulfilled' ? results[4].value : null;
+  const crons        = results[5].status === 'fulfilled' ? results[5].value : null;
+  const skillsData   = results[6].status === 'fulfilled' ? results[6].value : null;
+
+  // Build ollamaModel lookup from bridge
+  const ollamaMap = {};
+  if (Array.isArray(bridgeAgents)) {
+    bridgeAgents.forEach(a => { if (a && a.ollamaModel && a.name) ollamaMap[a.name] = a.ollamaModel; });
+  }
+
+  if (workshopData && Array.isArray(workshopData.agents)) {
+    const agents = workshopData.agents.map(a => ({
+      ...a,
+      ollamaModel: ollamaMap[a.name] || null,
+    }));
+    renderAgents(agents);
+    renderInbox(agents);
+    state.agents = agents;
+    // Mark successful fetch + update last-updated display
+    state.lastSuccessMs = Date.now();
+  } else {
+    // Workshop server down or bad shape — always show offline, even with stale state
+    document.getElementById('grid-claude').innerHTML = '<div class="offline-msg">⚠ Workshop server offline (localhost:3500)</div>';
+    document.getElementById('grid-ollama').innerHTML = '';
+    state.agents = [];
+  }
+
+  renderBridgeHealth(bridgeHealth);
+  renderTasks(tasks);
+  renderProtocols(protocols);
+  renderSkills(skillsData);
+  renderSchedule(crons);
+}
+
+// ─── VISUAL TICK (cosmetic only — does NOT drive fetches) ────────
+function startVisualTick() {
+  visualTickInterval = setInterval(() => {
+    const remaining = Math.max(0, Math.round((nextPollAt - Date.now()) / 1000));
+    document.getElementById('refresh-tick').textContent = `↻ ${remaining}s`;
+
+    // Last-updated indicator
+    const el = document.getElementById('last-updated');
+    if (state.lastSuccessMs) {
+      const ago = Math.round((Date.now() - state.lastSuccessMs) / 1000);
+      el.textContent = `updated ${ago}s ago`;
+      el.className = 'last-updated' + (ago > STALE_THRESH ? ' stale' : '');
+    }
+  }, 1000);
+}
+
+// ─── FETCH LOOP (recursive setTimeout — no concurrent fetches) ───
+async function pollLoop() {
+  await fetchAll();
+  nextPollAt = Date.now() + POLL_MS;
+  setTimeout(pollLoop, POLL_MS);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────
+pollLoop();
+startVisualTick();
+</script>
+
+</body>
+</html>

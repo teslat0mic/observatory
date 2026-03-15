@@ -4,23 +4,18 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { execSync, exec } = require('child_process');
-const { randomUUID } = require('crypto');
 
-const https = require('https');
-
-const PORT        = parseInt(process.env.WORKSHOP_DASHBOARD_PORT || '3500', 10);
-const BRIDGE_URL  = process.env.BRIDGE_URL || 'http://127.0.0.1:3460';
-const BRIDGE_HOST = new URL(BRIDGE_URL).hostname;
-const BRIDGE_PORT = parseInt(new URL(BRIDGE_URL).port, 10);
-
-const AGENTS_DIR   = process.env.WORKSHOP_AGENTS_DIR || path.join(os.homedir(), 'claude-agents');
-const JOBS_FILE    = process.env.WORKSHOP_JOBS_FILE   || path.join(os.homedir(), '.workshop', 'jobs.json');
-const BOTS_JSON    = process.env.WORKSHOP_BOTS_JSON  || path.join(os.homedir(), 'claude-migration', 'bots.json');
-const LAUNCH_DIR   = path.join(os.homedir(), 'Library', 'LaunchAgents');
-const PROJECTS_DIR = process.env.WORKSHOP_PROJECTS_DIR || path.join(AGENTS_DIR, 'main', 'memory', 'projects');
-const HTML_FILE    = path.join(__dirname, 'workshop.html');
+const PORT        = process.env.WORKSHOP_PORT        || 3500;
+const BRIDGE_HOST = process.env.WORKSHOP_BRIDGE_HOST || '127.0.0.1';
+const BRIDGE_PORT = process.env.WORKSHOP_BRIDGE_PORT || 3460;
+const HOME_DIR              = require('os').homedir();
+const AGENTS_DIR            = process.env.WORKSHOP_AGENTS_DIR  || path.join(HOME_DIR, 'claude-agents');
+const GLOBAL_COMMANDS_DIR   = process.env.WORKSHOP_COMMANDS_DIR || path.join(HOME_DIR, '.claude/commands');
+const PROJECTS_DIR          = process.env.WORKSHOP_PROJECTS_DIR || path.join(HOME_DIR, 'claude-agents/main/memory/projects');
+const LAUNCH_DIR            = path.join(HOME_DIR, 'Library/LaunchAgents');
+const HTML_FILE             = path.join(__dirname, 'workshop.html');
+const BOTS_JSON             = process.env.WORKSHOP_BOTS_JSON   || path.join(HOME_DIR, 'claude-migration/bots.json');
 
 // Read bots.json and return a map of name -> {displayName, ollamaModel}
 function readBotsMap() {
@@ -38,33 +33,29 @@ function readBotsMap() {
   } catch { return {}; }
 }
 
-// Known protocols — loaded from PROJECTS_DIR status files.
-// To customize, populate {key}-status.json files in PROJECTS_DIR,
-// or set WORKSHOP_KNOWN_PROTOCOLS env var as JSON.
-let KNOWN_PROTOCOLS = [
-  { key: 'nightwatch',   name: 'NIGHTWATCH',   desc: 'Autonomous builds' },
+// Known protocols — shown even without a status file on disk
+const KNOWN_PROTOCOLS = [
+  { key: 'moth',         name: 'MOTH',        desc: 'Dead code hunter' },
+  { key: 'lantern',      name: 'LANTERN',      desc: 'Server log digestion' },
   { key: 'gauntlet',     name: 'GAUNTLET',     desc: 'Error sweep' },
+  { key: 'nightwatch',   name: 'NIGHTWATCH',   desc: 'Autonomous builds' },
   { key: 'paramedic',    name: 'PARAMEDIC',    desc: 'Error triage' },
+  { key: 'bloodhound',   name: 'BLOODHOUND',   desc: 'DB query review' },
+  { key: 'cartographer', name: 'CARTOGRAPHER', desc: 'API drift detection' },
 ];
-if (process.env.WORKSHOP_KNOWN_PROTOCOLS) {
-  try {
-    KNOWN_PROTOCOLS = JSON.parse(process.env.WORKSHOP_KNOWN_PROTOCOLS);
-  } catch (e) {
-    console.warn('WORKSHOP_KNOWN_PROTOCOLS is not valid JSON, using defaults');
-  }
-}
 
 // --- Safety ---
 const BLOCKED_PATTERNS = ['config.php', '.env', 'secrets/', 'settings.json', 'settings.local.json'];
 
 function isPathSafe(filePath) {
   const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(AGENTS_DIR + path.sep)) return false;
   const lower = resolved.toLowerCase();
   for (const pat of BLOCKED_PATTERNS) {
     if (lower.includes(pat)) return false;
   }
-  return true;
+  if (resolved.startsWith(AGENTS_DIR)) return true;
+  if (resolved.startsWith(GLOBAL_COMMANDS_DIR)) return true;
+  return false;
 }
 
 // --- Helpers ---
@@ -73,7 +64,7 @@ function jsonRes(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, PUT, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
   res.end(data);
@@ -92,81 +83,14 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
-// --- Job Board ---
-function loadJobs() {
-  try {
-    if (!fs.existsSync(JOBS_FILE)) return { tasks: [], archived: [] };
-    return JSON.parse(fs.readFileSync(JOBS_FILE, 'utf8'));
-  } catch { return { tasks: [], archived: [] }; }
-}
-
-function saveJobs(data) {
-  const tmp = JOBS_FILE + '.tmp';
-  fs.mkdirSync(path.dirname(JOBS_FILE), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, JOBS_FILE);
-}
-
-
-function pushover(title, message, url) {
-  const token = process.env.PUSHOVER_TOKEN;
-  const user  = process.env.PUSHOVER_USER;
-  if (!token || !user) return;
-  const body = JSON.stringify({ token, user, title, message, url: url || '' });
-  const options = {
-    hostname: 'api.pushover.net',
-    path: '/1/messages.json',
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-  };
-  const req = https.request(options, (res) => {
-    res.resume(); // discard body
-  });
-  req.on('error', (e) => log(`Pushover error: ${e.message}`));
-  req.setTimeout(5000, () => req.destroy());
-  req.write(body);
-  req.end();
-}
-
-function routeToAgent(task, onSettled) {
-  if (!task.sessionKey || !task.resumptionTemplate || !task.response) return;
-  const parts = task.sessionKey.split(':');
-  const agentName = parts[0];
-  if (!agentName) return;
-
-  let message = task.resumptionTemplate
-    .replace(/\{\{response\}\}/g, task.response)
-    .replace(/\{\{title\}\}/g, task.title || '')
-    .replace(/\{\{project\}\}/g, task.project || '')
-    .replace(/\{\{detail\}\}/g, task.detail || '');
-
-  const body = JSON.stringify({ message });
-  const options = {
-    hostname: BRIDGE_HOST,
-    port: BRIDGE_PORT,
-    path: `/api/chat/${agentName}`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-  };
-  const req = http.request(options, (res) => {
-    res.resume();
-    task.routingResult = res.statusCode < 400 ? 'sent' : 'failed';
-    if (onSettled) onSettled();
-  });
-  req.on('error', () => { task.routingResult = 'failed'; if (onSettled) onSettled(); });
-  req.setTimeout(10000, () => { req.destroy(); task.routingResult = 'failed'; if (onSettled) onSettled(); });
-  req.write(body);
-  req.end();
-}
-
 // --- Bridge agent lookup (cached, refreshed every 15s) ---
 let bridgeAgentMap = {}; // name -> {hasTelegram}
 let bridgeCacheTs = 0;
-let bridgeOnline = false;
-let bridgeRefreshing = false;
+let bridgeOnline = false;   // fix #4: track bridge reachability
+let bridgeRefreshing = false; // fix #5: concurrency guard
 
 function refreshBridgeAgents() {
-  if (bridgeRefreshing) return Promise.resolve();
+  if (bridgeRefreshing) return Promise.resolve(); // fix #5: skip if in-flight
   bridgeRefreshing = true;
   return new Promise((resolve) => {
     const options = { hostname: BRIDGE_HOST, port: BRIDGE_PORT, path: '/api/agents', method: 'GET' };
@@ -180,16 +104,16 @@ function refreshBridgeAgents() {
           for (const a of data) map[a.name] = { hasTelegram: a.hasTelegram === true };
           bridgeAgentMap = map;
           bridgeCacheTs = Date.now();
-          bridgeOnline = true;
+          bridgeOnline = true; // fix #4: mark bridge reachable
         } catch {
-          bridgeOnline = false;
+          bridgeOnline = false; // fix #4: parse failure = treat as offline
         }
         bridgeRefreshing = false;
         resolve();
       });
     });
     req.on('error', () => {
-      bridgeOnline = false;
+      bridgeOnline = false; // fix #4: connection error = offline
       bridgeRefreshing = false;
       resolve();
     });
@@ -213,6 +137,7 @@ function countInboxFiles(inboxPath) {
 }
 
 // --- Last active timestamp from chat-history.json ---
+// fix #6: async to avoid blocking the event loop
 async function getLastActive(agentPath) {
   const histPath = path.join(agentPath, 'chat-history.json');
   try {
@@ -269,13 +194,42 @@ async function listAgents() {
         hasInbox,
         inboxCount,
         hasTelegram: bridgeInfo ? bridgeInfo.hasTelegram : false,
-        lastActive: await getLastActive(agentPath),
+        lastActive: await getLastActive(agentPath), // fix #6: await async fn
       });
     }
   } catch (e) {
     log(`Error scanning agents: ${e.message}`);
   }
+  // fix #4: wrap result to include bridgeOnline status
   return { bridgeOnline, agents: agents.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+function listAgentSkills(agentName) {
+  const globalSkills = [];
+  const agentSkills = [];
+
+  // Global skills (~/.claude/commands/)
+  try {
+    for (const f of fs.readdirSync(GLOBAL_COMMANDS_DIR)) {
+      if (!f.endsWith('.md')) continue;
+      const full = path.join(GLOBAL_COMMANDS_DIR, f);
+      const stat = fs.statSync(full);
+      globalSkills.push({ name: f.replace('.md', ''), path: full, size: stat.size });
+    }
+  } catch {}
+
+  // Agent-specific skills
+  const agentCmdDir = path.join(AGENTS_DIR, agentName, '.claude', 'commands');
+  try {
+    for (const f of fs.readdirSync(agentCmdDir)) {
+      if (!f.endsWith('.md')) continue;
+      const full = path.join(agentCmdDir, f);
+      const stat = fs.statSync(full);
+      agentSkills.push({ name: f.replace('.md', ''), path: full, size: stat.size });
+    }
+  } catch {}
+
+  return { global: globalSkills, agent: agentSkills };
 }
 
 function listAgentFiles(agentName) {
@@ -364,9 +318,9 @@ function proxyToBridge(method, bridgePath, reqBody, res, isSSE = false) {
   // Disable Nagle on upstream socket
   proxyReq.on('socket', (sock) => sock.setNoDelay(true));
 
-  // Timeout: 10 min ceiling for long-running agent queries
-  proxyReq.setTimeout(600_000, () => {
-    log('Bridge proxy timeout (10min) — destroying upstream request');
+  // Timeout: 30 min ceiling for long-running agent queries
+  proxyReq.setTimeout(1_800_000, () => {
+    log('Bridge proxy timeout (30min) — destroying upstream request');
     proxyReq.destroy(new Error('upstream timeout'));
   });
 
@@ -462,7 +416,7 @@ function readCrons() {
       }
       // Last run time from log file mtime
       let lastRunTs = null;
-      const logFile = (plist.StandardOutPath || '').replace(/^~/, os.homedir());
+      const logFile = (plist.StandardOutPath || '').replace(/^~/, require('os').homedir());
       if (logFile) { try { lastRunTs = fs.statSync(logFile).mtime.toISOString(); } catch {} }
       crons.push({ label, name, script, scheduleType, scheduleHuman, running: !!running, loaded, lastExit, keepAlive: !!plist.KeepAlive, calendarTimes, lastRunTs });
     } catch {}
@@ -480,7 +434,7 @@ async function handleRequest(req, res) {
   if (method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PUT, POST, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     });
     return res.end();
@@ -532,6 +486,38 @@ async function handleRequest(req, res) {
     return jsonRes(res, 200, files);
   }
 
+  // GET /api/agents/{name}/skills — skill files for one agent (global + agent-specific)
+  const skillsMatch = p.match(/^\/api\/agents\/([a-zA-Z0-9_-]+)\/skills$/);
+  if (skillsMatch && method === 'GET') {
+    return jsonRes(res, 200, listAgentSkills(skillsMatch[1]));
+  }
+
+  // GET /api/skills — all agents with agent-specific skills (for command-center)
+  if (p === '/api/skills' && method === 'GET') {
+    const globalSkills = [];
+    try {
+      for (const f of fs.readdirSync(GLOBAL_COMMANDS_DIR)) {
+        if (f.endsWith('.md')) globalSkills.push(f.replace('.md', ''));
+      }
+    } catch {}
+    const agents = [];
+    try {
+      for (const d of fs.readdirSync(AGENTS_DIR, { withFileTypes: true })) {
+        if (!d.isDirectory()) continue;
+        const cmdDir = path.join(AGENTS_DIR, d.name, '.claude', 'commands');
+        if (!fs.existsSync(cmdDir)) continue;
+        const skills = [];
+        try {
+          for (const f of fs.readdirSync(cmdDir)) {
+            if (f.endsWith('.md')) skills.push(f.replace('.md', ''));
+          }
+        } catch {}
+        if (skills.length > 0) agents.push({ name: d.name, skills });
+      }
+    } catch {}
+    return jsonRes(res, 200, { global: globalSkills, agents });
+  }
+
   // GET /api/file?path= — read file
   if (p === '/api/file' && method === 'GET') {
     const filePath = url.searchParams.get('path');
@@ -565,7 +551,7 @@ async function handleRequest(req, res) {
     }
   }
 
-  // --- Chat Proxy (forward to bridge) ---
+  // --- Chat Proxy (forward to bridge :3460) ---
 
   // POST /api/chat/{agent} — SSE stream proxy
   const chatMatch = p.match(/^\/api\/chat\/([a-zA-Z0-9_.-]+)$/);
@@ -599,7 +585,7 @@ async function handleRequest(req, res) {
   // POST /api/bridge/restart — kill old bridge, wait for port release, launchd restarts it
   if (p === '/api/bridge/restart' && method === 'POST') {
     try {
-      const pidFile = path.join(os.homedir(), '.claude', 'state', 'telegram-bridge.pid');
+      const pidFile = path.join(require('os').homedir(), '.claude/state/telegram-bridge.pid');
       let targetPid = 0;
 
       // Find the bridge PID
@@ -608,7 +594,7 @@ async function handleRequest(req, res) {
       } catch {
         // Fallback: find by port
         try {
-          const out = execSync(`lsof -ti :${BRIDGE_PORT}`, { timeout: 3000 }).toString().trim();
+          const out = execSync('lsof -ti :3460', { timeout: 3000 }).toString().trim();
           if (out) targetPid = parseInt(out.split('\n')[0], 10);
         } catch {}
       }
@@ -678,131 +664,6 @@ async function handleRequest(req, res) {
   // GET /api/crons — launchd workshop job status
   if (p === '/api/crons' && method === 'GET') {
     return jsonRes(res, 200, readCrons());
-  }
-
-  // --- Job Board API ---
-
-  // GET /api/jobs/archived — must come before /api/jobs/:id
-  if (p === '/api/jobs/archived' && method === 'GET') {
-    const data = loadJobs();
-    const archived = (data.archived || []).slice(-50).reverse();
-    return jsonRes(res, 200, archived);
-  }
-
-  // GET /api/jobs — pending tasks sorted by priority then createdAt
-  if (p === '/api/jobs' && method === 'GET') {
-    const data = loadJobs();
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-    const tasks = (data.tasks || []).sort((a, b) => {
-      const pa = priorityOrder[a.priority] ?? 1;
-      const pb = priorityOrder[b.priority] ?? 1;
-      if (pa !== pb) return pa - pb;
-      return new Date(a.createdAt) - new Date(b.createdAt);
-    });
-    return jsonRes(res, 200, tasks);
-  }
-
-  // POST /api/jobs — create a task
-  if (p === '/api/jobs' && method === 'POST') {
-    let body;
-    try { body = JSON.parse(await readBody(req)); } catch { return jsonRes(res, 400, { error: 'Invalid JSON' }); }
-
-    if (!body.title) return jsonRes(res, 400, { error: 'title is required' });
-    const validPriorities = ['high', 'medium', 'low'];
-    const validTypes = ['manual', 'approval'];
-    if (body.priority && !validPriorities.includes(body.priority)) return jsonRes(res, 400, { error: 'priority must be high, medium, or low' });
-    if (body.type && !validTypes.includes(body.type)) return jsonRes(res, 400, { error: 'type must be manual or approval' });
-
-    const task = {
-      id: randomUUID(),
-      title: body.title,
-      detail: body.detail || '',
-      project: body.project || '',
-      priority: body.priority || 'medium',
-      type: body.type || 'manual',
-      createdBy: body.createdBy || 'unknown',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      sessionKey: body.sessionKey || null,
-      resumptionTemplate: body.resumptionTemplate || null,
-    };
-
-    const data = loadJobs();
-    if (!data.tasks) data.tasks = [];
-    data.tasks.push(task);
-    saveJobs(data);
-    log(`Job created: ${task.id} "${task.title}" [${task.priority}]`);
-
-    if (task.priority === 'high') {
-      pushover(`[HIGH] ${task.title}`, task.detail || task.title, `http://localhost:${PORT}`);
-    }
-
-    return jsonRes(res, 201, task);
-  }
-
-  // GET /api/jobs/:id — get single task
-  const jobIdMatch = p.match(/^\/api\/jobs\/([a-zA-Z0-9_-]+)$/);
-  if (jobIdMatch && method === 'GET') {
-    const id = jobIdMatch[1];
-    const data = loadJobs();
-    const task = (data.tasks || []).find(t => t.id === id)
-               || (data.archived || []).find(t => t.id === id);
-    if (!task) return jsonRes(res, 404, { error: 'Job not found' });
-    return jsonRes(res, 200, task);
-  }
-
-  // PATCH /api/jobs/:id — update task
-  if (jobIdMatch && method === 'PATCH') {
-    const id = jobIdMatch[1];
-    let body;
-    try { body = JSON.parse(await readBody(req)); } catch { return jsonRes(res, 400, { error: 'Invalid JSON' }); }
-
-    const data = loadJobs();
-    if (!data.tasks) data.tasks = [];
-    if (!data.archived) data.archived = [];
-
-    const idx = data.tasks.findIndex(t => t.id === id);
-    if (idx === -1) return jsonRes(res, 404, { error: 'Job not found (already archived or missing)' });
-
-    const task = data.tasks[idx];
-    if (body.response !== undefined) task.response = body.response;
-    if (body.status !== undefined) task.status = body.status;
-
-    if (task.status === 'completed') {
-      task.completedAt = new Date().toISOString();
-      data.tasks.splice(idx, 1);
-      data.archived.push(task);
-      // Keep archived to last 200 entries
-      if (data.archived.length > 200) data.archived = data.archived.slice(-200);
-
-      // Attempt agent routing if applicable
-      if (task.sessionKey && task.resumptionTemplate && task.response) {
-        try {
-          routeToAgent(task, () => {
-            // Save again after routing completes so routingResult is persisted
-            try { saveJobs(data); } catch (e) { log(`saveJobs after routing error: ${e.message}`); }
-          });
-        } catch (e) { log(`Routing error: ${e.message}`); task.routingResult = 'failed'; }
-      }
-
-      log(`Job completed: ${task.id} "${task.title}"`);
-    }
-
-    saveJobs(data); // save immediately (routingResult may be updated again async after routing)
-    return jsonRes(res, 200, task);
-  }
-
-  // DELETE /api/jobs/:id — delete pending task
-  if (jobIdMatch && method === 'DELETE') {
-    const id = jobIdMatch[1];
-    const data = loadJobs();
-    if (!data.tasks) data.tasks = [];
-    const idx = data.tasks.findIndex(t => t.id === id);
-    if (idx === -1) return jsonRes(res, 404, { error: 'Job not found' });
-    data.tasks.splice(idx, 1);
-    saveJobs(data);
-    log(`Job deleted: ${id}`);
-    return jsonRes(res, 200, { ok: true });
   }
 
   // POST /api/crons/:name/stop — unload a launchd job

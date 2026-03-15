@@ -12,7 +12,14 @@
       "name": "pm-example",
       "tokenFile": "/Users/YOUR_USERNAME/.workshop/secrets/telegram-pm.token",
       "agentDir": "/Users/YOUR_USERNAME/claude-agents/pm-example/",
-      "comment": "Example project PM agent"
+      "comment": "Example project PM agent with Telegram access"
+    },
+    {
+      "name": "specialist-example",
+      "displayName": "Example Specialist · Deep-skill agent",
+      "dashboardOnly": true,
+      "agentDir": "/Users/YOUR_USERNAME/claude-agents/specialist-example/",
+      "comment": "dashboardOnly agents appear in the dashboard but have no Telegram bot. Use when you have more agents than bot slots."
     }
   ]
 }
