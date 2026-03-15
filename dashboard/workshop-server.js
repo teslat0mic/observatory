@@ -133,21 +133,40 @@ function pushover(title, message, url) {
   req.end();
 }
 
-function routeToAgent(task) {
-  if (!task.sessionKey || !task.resumptionTemplate || !task.response) return;
+async function routeToAgent(task, newSession = false) {
+  if (!task.sessionKey || !task.resumptionTemplate || !task.response) return false;
   const parts = task.sessionKey.split(':');
-  const agentName = parts[0];
-  if (!agentName) return;
+  const agentName = parts.length >= 2 ? parts[1] : parts[0];
+  if (!agentName) return false;
   if (!/^[a-zA-Z0-9_-]+$/.test(agentName)) {
     console.warn(`[jobs] routeToAgent: invalid agentName in sessionKey: ${agentName}`);
-    return;
+    return false;
   }
 
+  // Reset session before routing if requested
+  if (newSession) {
+    await new Promise((resolve) => {
+      const options = {
+        hostname: BRIDGE_HOST,
+        port: BRIDGE_PORT,
+        path: `/api/chat/${agentName}/new-session`,
+        method: 'POST',
+        headers: { 'Content-Length': 0 },
+      };
+      const req = http.request(options, (res) => { res.resume(); resolve(); });
+      req.setTimeout(5000, () => { req.destroy(); resolve(); });
+      req.on('error', () => resolve());
+      req.end();
+    });
+  }
+
+  // Supported template placeholders: {{response}} {{title}} {{project}} {{detail}} {{type}} {{id}}
   let message = task.resumptionTemplate
     .replace(/\{\{response\}\}/g, task.response)
     .replace(/\{\{title\}\}/g, task.title || '')
     .replace(/\{\{project\}\}/g, task.project || '')
-    .replace(/\{\{detail\}\}/g, task.detail || '');
+    .replace(/\{\{detail\}\}/g, task.detail || '')
+    .replace(/\{\{id\}\}/g, task.id || '');
 
   const body = JSON.stringify({ message });
   const options = {
@@ -157,14 +176,37 @@ function routeToAgent(task) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
   };
-  const req = http.request(options, (res) => {
-    res.resume();
-    task.routingResult = res.statusCode < 400 ? 'sent' : 'failed';
+
+  return new Promise((resolve) => {
+    const req = http.request(options, (res) => {
+      res.resume();
+      resolve(res.statusCode < 400);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(10000, () => { req.destroy(); resolve(false); });
+    req.write(body);
+    req.end();
   });
-  req.on('error', () => { task.routingResult = 'failed'; });
-  req.setTimeout(10000, () => { req.destroy(); task.routingResult = 'failed'; });
-  req.write(body);
-  req.end();
+}
+
+function routeFallbackToMain(task) {
+  const msg = `Task completed but couldn't route to agent: "${task.title}" — Response: ${task.response}`;
+  http.request({
+    hostname: BRIDGE_HOST, port: BRIDGE_PORT,
+    path: '/api/chat/main', method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(JSON.stringify({ message: msg })) }
+  }, res => res.resume()).on('error', () => {}).end(JSON.stringify({ message: msg }));
+}
+
+// Per-agent routing queue — serializes deliveries to same agent, parallel across agents
+const _agentRouteQueues = new Map();
+function enqueueRouting(sessionKey, routingFn) {
+  const parts = sessionKey.split(':');
+  const agentId = parts.length >= 2 ? parts[1] : 'main';
+  const prev = _agentRouteQueues.get(agentId) || Promise.resolve();
+  const next = prev.then(() => routingFn()).catch(() => {});
+  _agentRouteQueues.set(agentId, next);
+  return next;
 }
 
 // --- Bridge agent lookup (cached, refreshed every 15s) ---
@@ -803,6 +845,8 @@ async function handleRequest(req, res) {
       createdAt: new Date().toISOString(),
       sessionKey: body.sessionKey || null,
       resumptionTemplate: body.resumptionTemplate || null,
+      newSession: body.newSession === true,
+      routingResult: null,
     };
 
     const data = loadJobs();
@@ -863,7 +907,12 @@ async function handleRequest(req, res) {
 
       // Attempt agent routing if applicable
       if (task.sessionKey && task.resumptionTemplate && task.response) {
-        try { routeToAgent(task); } catch (e) { log(`Routing error: ${e.message}`); task.routingResult = 'failed'; }
+        enqueueRouting(task.sessionKey, () => routeToAgent(task, task.newSession === true))
+          .then(ok => {
+            task.routingResult = ok ? 'sent' : 'fallback';
+            if (!ok) routeFallbackToMain(task);
+            saveJobs(data);
+          });
       }
 
       log(`Job completed: ${task.id} "${task.title}"`);

@@ -567,7 +567,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 }
 .task-card:hover { border-color: var(--border-focus); }
 .task-card.high-priority { border-left: 3px solid var(--red); }
-.task-card.expanded { border-color: var(--border-focus); }
+.task-card.expanded {
+  border-color: var(--accent, #4a6fa5);
+  box-shadow: 0 0 0 1px var(--accent, #4a6fa5), 0 4px 16px rgba(74,111,165,0.2);
+}
 
 .task-card-header {
   display: flex;
@@ -596,6 +599,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .task-badge.priority-low    { background: #222; color: var(--text-dim); }
 .task-badge.type-manual   { background: #1a2a3a; color: #88aacc; }
 .task-badge.type-approval { background: #2a1a3a; color: #aa88cc; }
+.task-badge.type-decision  { background: #3a2a00; color: #c8860a; }
+.task-badge.type-config    { background: #0a2a0a; color: #4caf50; }
+.task-badge.type-info      { background: #1a1a2a; color: #7a8aaa; }
 .task-badge.status-completed { background: #1a3a1a; color: #88cc88; }
 
 .task-card-meta {
@@ -607,11 +613,18 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 }
 
 .task-card-body {
-  display: none;
-  padding: 0 12px 12px;
-  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+  overflow: hidden;
+  border-top: 0px solid var(--border);
 }
-.task-card.expanded .task-card-body { display: block; }
+.task-card-body > div { min-height: 0; overflow: hidden; }
+.task-card.expanded .task-card-body {
+  grid-template-rows: 1fr;
+  border-top-width: 1px;
+}
+.task-card.expanded .task-card-body > div { padding: 0 12px 12px; }
 
 .task-detail-text {
   font-size: 13px;
@@ -718,6 +731,27 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .task-form-row { display: flex; gap: 8px; }
 .task-form-row > div { flex: 1; }
 .task-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Code block copy button */
+.code-block-wrapper { position: relative; }
+.copy-btn { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 2px 8px; background: #333; color: #ccc; border: none; border-radius: 3px; cursor: pointer; }
+.copy-btn:hover { background: #444; color: #eee; }
+
+/* Task detail markdown */
+.task-detail-text h3 { font-size: 13px; font-weight: 600; color: var(--text-bright); margin: 8px 0 4px; }
+.task-detail-text h4 { font-size: 12px; font-weight: 600; color: var(--text-bright); margin: 6px 0 3px; }
+.task-detail-text ul { padding-left: 18px; margin: 4px 0; }
+.task-detail-text li { margin: 2px 0; }
+.task-detail-text a { color: var(--accent); }
+.task-detail-text code { background: #1a1a1a; padding: 1px 4px; border-radius: 3px; font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
+.task-detail-text pre { background: #0d0d0d; padding: 10px 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; border: 1px solid var(--border); }
+.task-detail-text pre code { background: none; padding: 0; font-size: 12px; }
+
+/* Project filter pills */
+.task-project-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.project-pill { font-size: 11px; padding: 2px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-hover); color: var(--text-dim); cursor: pointer; transition: all 0.12s; }
+.project-pill:hover { border-color: var(--border-focus); color: var(--text); }
+.project-pill.active { border-color: var(--accent-dim); color: var(--accent); background: var(--bg-card); }
 
 /* Mobile adjustments for task queue */
 @media (max-width: 767px) {
@@ -933,6 +967,12 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
         <button class="tq-btn" id="taskArchivedBtn" onclick="toggleTaskArchive()">Archived</button>
         <button class="tq-btn primary" onclick="openNewTaskForm()">+ New Task</button>
       </div>
+      <div style="padding: 8px 16px 0; flex-shrink: 0;">
+        <input type="text" id="taskSearchInput" placeholder="Search tasks..."
+          oninput="filterTasks()"
+          style="width:100%; box-sizing:border-box; padding:6px 10px; background:#1a1a1a; border:1px solid #333; color:#ccc; border-radius:4px; margin-bottom:8px; font-size:13px; outline:none;">
+        <div class="task-project-pills" id="taskProjectPills"></div>
+      </div>
       <div class="task-queue-body" id="taskQueueBody"></div>
     </div>
   </div>
@@ -977,6 +1017,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
         </select>
       </div>
     </div>
+    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#888; margin-top:8px;">
+      <input type="checkbox" id="taskNewSession"> Start fresh agent session on completion
+    </label>
     <div class="task-form-actions">
       <button class="tq-btn" onclick="closeNewTaskForm()">Cancel</button>
       <button class="tq-btn primary" onclick="submitNewTask()">Create Task</button>
@@ -1344,19 +1387,23 @@ function renderMarkdown(text) {
   if (!text) return '';
   let html = esc(text);
 
-  // Code blocks (``` ... ```)
+  // Code blocks (``` ... ```) — with copy button
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${code}</code></pre>`;
+    return `<div class="code-block-wrapper"><button class="copy-btn" onclick="copyCode(this)">Copy</button><pre><code>${code}</code></pre></div>`;
   });
 
   // Inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+
   // Bold
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
-  // Italic
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Italic (only single * not followed by another *)
+  html = html.replace(/\*(?!\*)(.+?)\*(?!\*)/g, '<em>$1</em>');
 
   // Links — block javascript: URIs to prevent XSS
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
@@ -1364,7 +1411,31 @@ function renderMarkdown(text) {
     return safe ? `<a href="${url}" target="_blank">${label}</a>` : label;
   });
 
+  // Checkboxes
+  html = html.replace(/^- \[x\] (.+)$/gm, '<li style="list-style:none"><input type="checkbox" checked disabled> $1</li>');
+  html = html.replace(/^- \[ \] (.+)$/gm, '<li style="list-style:none"><input type="checkbox" disabled> $1</li>');
+
+  // Unordered lists
+  html = html.replace(/^[*-] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>[\s\S]*?<\/li>)(\s*\n)?(?=<li>|$)/g, (match) => match);
+  // Wrap consecutive <li> in <ul>
+  html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+
+  // Bare URLs
+  html = html.replace(/(?<!['"=])(https?:\/\/[^\s<>"']+)/g, '<a href="$1" target="_blank">$1</a>');
+
   return html;
+}
+
+function copyCode(btn) {
+  const pre = btn.nextElementSibling;
+  const code = pre ? pre.querySelector('code') : null;
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }).catch(() => {});
 }
 
 function esc(s) {
@@ -2102,6 +2173,47 @@ function updateTaskTabBadge() {
   }
 }
 
+let activeProjectFilter = 'All';
+
+function renderProjectPills(tasks) {
+  const container = document.getElementById('taskProjectPills');
+  if (!container) return;
+  const projects = ['All', ...new Set(tasks.map(t => t.project).filter(Boolean))];
+  container.innerHTML = '';
+  for (const p of projects) {
+    const pill = document.createElement('button');
+    pill.className = 'project-pill' + (p === activeProjectFilter ? ' active' : '');
+    pill.textContent = p;
+    pill.onclick = () => {
+      activeProjectFilter = p;
+      renderProjectPills(tasks);
+      applyTaskFilters();
+    };
+    container.appendChild(pill);
+  }
+}
+
+function applyTaskFilters() {
+  const query = (document.getElementById('taskSearchInput')?.value || '').toLowerCase();
+  const body = document.getElementById('taskQueueBody');
+  const cards = body.querySelectorAll('.task-card[data-task-id]');
+  for (const card of cards) {
+    const id = card.dataset.taskId;
+    const task = taskQueueData.find(t => t.id === id);
+    if (!task) { card.style.display = ''; continue; }
+    const matchProject = activeProjectFilter === 'All' || task.project === activeProjectFilter;
+    const matchSearch = !query ||
+      (task.title || '').toLowerCase().includes(query) ||
+      (task.detail || '').toLowerCase().includes(query) ||
+      (task.project || '').toLowerCase().includes(query);
+    card.style.display = (matchProject && matchSearch) ? '' : 'none';
+  }
+}
+
+function filterTasks() {
+  applyTaskFilters();
+}
+
 function renderTaskQueue() {
   const body = document.getElementById('taskQueueBody');
   body.innerHTML = '';
@@ -2111,12 +2223,17 @@ function renderTaskQueue() {
     empty.className = 'task-empty-state';
     empty.textContent = taskQueueShowArchived ? 'No archived tasks.' : 'No pending tasks. Agents are clear.';
     body.appendChild(empty);
+    renderProjectPills([]);
     return;
   }
+
+  renderProjectPills(taskQueueData);
 
   for (const task of taskQueueData) {
     body.appendChild(renderTaskCard(task));
   }
+
+  applyTaskFilters();
 }
 
 function renderTaskCard(task) {
@@ -2127,6 +2244,25 @@ function renderTaskCard(task) {
   card.dataset.taskId = task.id;
 
   const relTime = formatRelativeTime(task.createdAt || task.completedAt);
+
+  const isInfo = task.type === 'info';
+  let actionsHtml = '';
+  if (!taskQueueShowArchived) {
+    if (isInfo) {
+      actionsHtml = `<div class="task-actions"><button class="tq-btn primary" onclick="completeTask('${esc(task.id)}', 'acknowledged')">Got it</button><button class="tq-btn danger" onclick="deleteTask('${esc(task.id)}')">Delete</button></div>`;
+    } else {
+      actionsHtml = `
+      <div class="task-response-area">
+        <label>Your response (optional)</label>
+        <textarea id="taskResp_${esc(task.id)}" placeholder="Leave blank to complete without a response...">${esc(task.response || '')}</textarea>
+      </div>
+      <div class="task-actions">
+        <button class="tq-btn primary" onclick="completeTask('${esc(task.id)}')">Complete</button>
+        <button class="tq-btn danger" onclick="deleteTask('${esc(task.id)}')">Delete</button>
+        ${task.routingResult ? `<span style="font-size:11px;color:var(--text-dim)">routed: ${esc(task.routingResult)}</span>` : ''}
+      </div>`;
+    }
+  }
 
   card.innerHTML = `
     <div class="task-card-header">
@@ -2140,21 +2276,11 @@ function renderTaskCard(task) {
       ${task.createdBy ? `<span>by ${esc(task.createdBy)}</span>` : ''}
       ${relTime ? `<span>${esc(relTime)} ago</span>` : ''}
     </div>
-    <div class="task-card-body">
-      ${task.detail ? `<div class="task-detail-text">${esc(task.detail)}</div>` : '<div style="padding:8px 0;color:var(--text-dim);font-size:12px">No detail provided.</div>'}
+    <div class="task-card-body"><div>
+      ${task.detail ? `<div class="task-detail-text">${renderMarkdown(task.detail)}</div>` : '<div style="padding:8px 0;color:var(--text-dim);font-size:12px">No detail provided.</div>'}
       ${task.response ? `<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">Response:</div><div class="task-detail-text" style="color:var(--green)">${esc(task.response)}</div>` : ''}
-      ${!taskQueueShowArchived ? `
-      <div class="task-response-area">
-        <label>Your response (optional)</label>
-        <textarea id="taskResp_${esc(task.id)}" placeholder="Leave blank to complete without a response...">${esc(task.response || '')}</textarea>
-      </div>
-      <div class="task-actions">
-        <button class="tq-btn primary" onclick="completeTask('${esc(task.id)}')">Complete</button>
-        <button class="tq-btn danger" onclick="deleteTask('${esc(task.id)}')">Delete</button>
-        ${task.routingResult ? `<span style="font-size:11px;color:var(--text-dim)">routed: ${esc(task.routingResult)}</span>` : ''}
-      </div>
-      ` : ''}
-    </div>
+      ${actionsHtml}
+    </div></div>
   `;
 
   card.querySelector('.task-card-header').onclick = () => {
@@ -2165,9 +2291,9 @@ function renderTaskCard(task) {
   return card;
 }
 
-async function completeTask(id) {
+async function completeTask(id, fixedResponse) {
   const textarea = document.getElementById(`taskResp_${id}`);
-  const response = textarea ? textarea.value.trim() : '';
+  const response = fixedResponse !== undefined ? fixedResponse : (textarea ? textarea.value.trim() : '');
   try {
     const res = await fetch(`${API}/api/jobs/${id}`, {
       method: 'PATCH',
@@ -2201,6 +2327,7 @@ function openNewTaskForm() {
   document.getElementById('taskFormCreatedBy').value = '';
   document.getElementById('taskFormPriority').value = 'medium';
   document.getElementById('taskFormType').value = 'manual';
+  document.getElementById('taskNewSession').checked = false;
   document.getElementById('taskFormOverlay').classList.add('visible');
   document.getElementById('taskFormTitle').focus();
 }
@@ -2219,6 +2346,7 @@ async function submitNewTask() {
     createdBy: document.getElementById('taskFormCreatedBy').value.trim() || 'dashboard',
     priority: document.getElementById('taskFormPriority').value,
     type: document.getElementById('taskFormType').value,
+    newSession: document.getElementById('taskNewSession').checked,
   };
   try {
     const res = await fetch(`${API}/api/jobs`, {
@@ -2256,7 +2384,7 @@ loadTaskQueue();
 setInterval(checkBridgeHealth, 10000);
 setInterval(pollMessages, 5000);
 setInterval(loadAgents, 30000);
-setInterval(() => { if (!taskQueueShowArchived) loadTaskQueue(); }, 30000);
+setInterval(() => { if (!taskQueueShowArchived) loadTaskQueue(); }, 60000);
 </script>
 </body>
 </html>
