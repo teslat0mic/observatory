@@ -128,7 +128,7 @@ Context: [relevant file paths, existing patterns]
 
 ## References
 
-- `../commandant/CLAUDE.md` — Zenith (my commandant)
+- `~/claude-agents/main/CLAUDE.md` — Zenith (my commandant — exact path depends on how the commandant was set up)
 - `~/.claude/CLAUDE.md` — global user preferences
 - `protocols/bug-fix-protocol.md` — detailed bug triage steps
 - `protocols/agent-messaging.md` — how to message other agents

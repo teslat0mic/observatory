@@ -14,7 +14,7 @@ import os from "node:os";
 const MEMORY_DIR  = process.env.MEMORY_DIR  || path.join(os.homedir(), '.workshop', 'memory');
 const VEC_DYLIB   = process.env.VEC_DYLIB   || '';  // user must configure — path to sqlite-vec dylib
 const OLLAMA_URL  = process.env.OLLAMA_URL  || 'http://localhost:11434/v1/embeddings';
-const EMBED_MODEL = process.env.EMBED_MODEL || 'embeddinggemma:300m';
+const EMBED_MODEL = process.env.EMBED_MODEL || 'nomic-embed-text';
 
 const VECTOR_WEIGHT = 0.7;
 const TEXT_WEIGHT = 0.3;
@@ -82,7 +82,7 @@ function tokenizeQuery(query) {
 
 // --- Hybrid search ---
 
-async function hybridSearch(db, queryEmbedding, queryText, sources = ["memory", "sessions"]) {
+async function hybridSearch(db, queryEmbedding, queryText) {
   const scoreMap = new Map(); // id -> { vectorScore, textScore, chunk }
 
   // 1. Vector search (only if sqlite-vec is available)
@@ -90,27 +90,24 @@ async function hybridSearch(db, queryEmbedding, queryText, sources = ["memory", 
 
   if (vecAvailable && queryEmbedding) {
     try {
-      const placeholders = sources.map(() => "?").join(",");
       const vecSql = `
-        SELECT c.id, c.path, c.start_line, c.end_line, c.text, c.source,
+        SELECT c.id, c.file, c.content,
                vec_distance_cosine(v.embedding, ?) AS dist
           FROM chunks_vec v
           JOIN chunks c ON c.id = v.id
-         WHERE c.model = ?
-           AND c.source IN (${placeholders})
          ORDER BY dist ASC
          LIMIT ?
       `;
       // Convert float64 array to Float32Array buffer for vec0
       const f32 = new Float32Array(queryEmbedding);
-      const vecRows = db.prepare(vecSql).all(Buffer.from(f32.buffer), EMBED_MODEL, ...sources, candidateLimit);
+      const vecRows = db.prepare(vecSql).all(Buffer.from(f32.buffer), candidateLimit);
 
       for (const row of vecRows) {
         const score = 1 - row.dist;
         scoreMap.set(row.id, {
           vectorScore: score,
           textScore: 0,
-          chunk: { id: row.id, path: row.path, startLine: row.start_line, endLine: row.end_line, text: row.text, source: row.source },
+          chunk: { id: row.id, file: row.file, content: row.content },
         });
       }
     } catch (e) {
@@ -124,18 +121,16 @@ async function hybridSearch(db, queryEmbedding, queryText, sources = ["memory", 
   const ftsQuery = tokenizeQuery(queryText);
   if (ftsQuery) {
     try {
-      const placeholders = sources.map(() => "?").join(",");
       const ftsSql = `
-        SELECT id, path, source, start_line, end_line, text,
+        SELECT c.id, c.file, c.content,
                bm25(chunks_fts) AS rank
           FROM chunks_fts
+          JOIN chunks c ON c.id = chunks_fts.rowid
          WHERE chunks_fts MATCH ?
-           AND model = ?
-           AND source IN (${placeholders})
          ORDER BY rank ASC
          LIMIT ?
       `;
-      const ftsRows = db.prepare(ftsSql).all(ftsQuery, EMBED_MODEL, ...sources, candidateLimit);
+      const ftsRows = db.prepare(ftsSql).all(ftsQuery, candidateLimit);
 
       for (const row of ftsRows) {
         const textScore = bm25RankToScore(Math.abs(row.rank));
@@ -146,7 +141,7 @@ async function hybridSearch(db, queryEmbedding, queryText, sources = ["memory", 
           scoreMap.set(row.id, {
             vectorScore: 0,
             textScore,
-            chunk: { id: row.id, path: row.path, startLine: row.start_line, endLine: row.end_line, text: row.text, source: row.source },
+            chunk: { id: row.id, file: row.file, content: row.content },
           });
         }
       }
@@ -209,9 +204,9 @@ server.tool(
 
       const formatted = results
         .map((r, i) => {
-          const snippet = r.text.length > SNIPPET_MAX_CHARS ? r.text.slice(0, SNIPPET_MAX_CHARS) + "..." : r.text;
+          const snippet = r.content.length > SNIPPET_MAX_CHARS ? r.content.slice(0, SNIPPET_MAX_CHARS) + "..." : r.content;
           const scoreStr = r.score != null ? r.score.toFixed(3) : 'n/a';
-          return `### Result ${i + 1} (score: ${scoreStr})\n**${r.path}** lines ${r.startLine}-${r.endLine}\n\n${snippet}`;
+          return `### Result ${i + 1} (score: ${scoreStr})\n**${r.file}**\n\n${snippet}`;
         })
         .join("\n\n---\n\n");
 

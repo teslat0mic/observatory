@@ -17,7 +17,7 @@ const Database = require('better-sqlite3');
 const MEMORY_DIR = process.env.MEMORY_DIR || join(os.homedir(), '.workshop', 'memory');
 const AGENTS_DIR = process.env.WORKSHOP_AGENTS_DIR || join(os.homedir(), 'claude-agents');
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434/v1/embeddings';
-const EMBED_MODEL = process.env.EMBED_MODEL || 'embeddinggemma:300m';
+const EMBED_MODEL = process.env.EMBED_MODEL || 'nomic-embed-text';
 const VEC_DYLIB = process.env.VEC_DYLIB || '';
 const CHUNK_SIZE = 400; // words per chunk
 

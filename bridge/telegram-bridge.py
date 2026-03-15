@@ -254,7 +254,7 @@ async def run_claude(bot: dict, message_text: str, cfg: dict, on_token=None, on_
         env=build_clean_env(),
         continue_conversation=True,
         include_partial_messages=True,
-        mcp_servers=Path(__file__).parent / ".mcp.json",
+        mcp_servers=Path.home() / ".claude" / ".mcp.json",
     )
 
     result_text = ""

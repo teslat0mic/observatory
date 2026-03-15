@@ -9,10 +9,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>REPLACE_WITH_YOUR_NODE_PATH</string>
-        <string>YOUR_HOME_DIR/claude-agents/workshop-starter/dashboard/workshop-server.js</string>
+        <!-- Run: which python3 (or node) to find the executable path -->
+        <string>YOUR_HOME_DIR/claude-agents/workshop/workshop-server.js</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>YOUR_HOME_DIR/claude-agents/workshop-starter/dashboard</string>
+    <string>YOUR_HOME_DIR/claude-agents/workshop</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

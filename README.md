@@ -18,11 +18,11 @@ Run a team of AI agents from your phone or browser. Each agent has its own ident
 
 ## Prerequisites
 
-- macOS (Apple Silicon tested; Intel should work)
+- macOS — Both Apple Silicon (M-series) and Intel Macs are supported. The correct sqlite-vec binary is selected automatically via optional dependencies.
 - **Claude Max subscription ($20/month)** — API keys will not work. This system uses Claude Code, not the Anthropic API.
 - Node.js 18+
 - Python 3.10+
-- [Ollama](https://ollama.ai) — for local embeddings (`ollama pull embeddinggemma:300m`)
+- [Ollama](https://ollama.ai) — for local embeddings (`ollama pull nomic-embed-text`)
 - Telegram account — optional. The dashboard works without any bots.
 
 ---
@@ -96,6 +96,8 @@ Agents without a `tokenFile` are dashboard-only (no Telegram polling).
 
 **`WORKSHOP_AGENTS_DIR`** — env var to override the default `~/claude-agents/` root.
 
+**`allowedUsers`** — a global list in `bots.json` that applies to all bots. If you add a user, they can message any bot in your system.
+
 **`.mcp.json`** — MCP server config for memory. Requires `VEC_DYLIB` pointing to your `sqlite-vec` dylib. The setup script finds this automatically on macOS.
 
 **`launchd/`** — LaunchAgent plists for auto-starting the bridge and dashboard on login. The setup script generates LaunchAgent plist files and prints the commands to load them. After running `setup.sh`, load them manually:
@@ -161,6 +163,23 @@ Two tools available to every agent via MCP:
 - **`memory_agents()`** — list all agent databases
 
 The memory directory convention: `YYYY-MM-DD.md` for daily notes, `MEMORY.md` for curated long-term memory. Agents read both at session start.
+
+### Indexing Your Memory Files
+
+The memory system indexes your `memory/*.md` files into SQLite for search. After writing memory notes, run:
+
+```bash
+node ~/claude-migration/memory-mcp/indexer.mjs <agent-name>
+# e.g.:
+node ~/claude-migration/memory-mcp/indexer.mjs main
+```
+
+This is a manual step — re-run it whenever you want search to reflect new memory. Optionally, set up a nightly cron:
+
+```bash
+# runs at 2am every night for the main agent
+0 2 * * * node ~/claude-migration/memory-mcp/indexer.mjs main
+```
 
 ---
 
