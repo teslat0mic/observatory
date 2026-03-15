@@ -378,9 +378,9 @@ cat <<'NEXTSTEPS'
    → Open Telegram, find your bot
    → Send: "Hello! Read your CLAUDE.md and introduce yourself."
 
-JOB BOARD
-  → Agents can post tasks for your review at http://localhost:3500 (Job Board tab)
+SKILLS & COMMANDS
+  → View all slash commands across agents at http://localhost:3500 (Skills tab)
+  → Full agent command center at http://localhost:3500/command-center.html
   → Optional Pushover notifications: set PUSHOVER_TOKEN and PUSHOVER_USER env vars
-  → High-priority jobs notify you immediately; others queue for review
 
 NEXTSTEPS

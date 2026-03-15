@@ -33,12 +33,14 @@ jobs:
       - name: Verify deployed files exist
         run: |
           echo "Checking deployed file locations..."
-          test -f ~/claude-migration/telegram-bridge.py      && echo "✓ bridge/telegram-bridge.py" || (echo "✗ bridge missing" && exit 1)
-          test -f ~/claude-agents/workshop/workshop-server.js && echo "✓ dashboard/workshop-server.js" || (echo "✗ dashboard missing" && exit 1)
-          test -f ~/claude-migration/memory-mcp/package.json  && echo "✓ memory-mcp/package.json" || (echo "✗ memory-mcp missing" && exit 1)
-          test -f ~/claude-agents/main/CLAUDE.md              && echo "✓ commandant CLAUDE.md" || (echo "✗ commandant CLAUDE.md missing" && exit 1)
-          test -f ~/.claude/.mcp.json                         && echo "✓ .mcp.json generated" || (echo "✗ .mcp.json missing" && exit 1)
-          test -f ~/.workshop/jobs.json                       && echo "✓ jobs.json initialized" || (echo "✗ jobs.json missing" && exit 1)
+          test -f ~/claude-migration/telegram-bridge.py           && echo "✓ bridge/telegram-bridge.py"      || (echo "✗ bridge missing" && exit 1)
+          test -f ~/claude-agents/workshop/workshop-server.js     && echo "✓ workshop-server.js"             || (echo "✗ workshop-server.js missing" && exit 1)
+          test -f ~/claude-agents/workshop/workshop.html          && echo "✓ workshop.html"                  || (echo "✗ workshop.html missing" && exit 1)
+          test -f ~/claude-agents/workshop/command-center.html    && echo "✓ command-center.html"            || (echo "✗ command-center.html missing" && exit 1)
+          test -f ~/claude-migration/memory-mcp/package.json      && echo "✓ memory-mcp/package.json"        || (echo "✗ memory-mcp missing" && exit 1)
+          test -f ~/claude-agents/main/CLAUDE.md                  && echo "✓ commandant CLAUDE.md"           || (echo "✗ commandant CLAUDE.md missing" && exit 1)
+          test -f ~/.claude/.mcp.json                             && echo "✓ .mcp.json generated"            || (echo "✗ .mcp.json missing" && exit 1)
+          test -f ~/.workshop/jobs.json                           && echo "✓ jobs.json initialized"          || (echo "✗ jobs.json missing" && exit 1)
 
       - name: Syntax checks
         run: |
@@ -53,6 +55,17 @@ jobs:
           node --check ~/claude-migration/memory-mcp/server.mjs    && echo "✓ server.mjs"
           node --check ~/claude-migration/memory-mcp/indexer.mjs   && echo "✓ indexer.mjs"
 
+          echo "HTML structure checks..."
+          python3 -c "
+          import sys
+          for f in ['$HOME/claude-agents/workshop/workshop.html', '$HOME/claude-agents/workshop/command-center.html']:
+              content = open(f).read()
+              assert '<html' in content, f'{f}: missing <html tag'
+              assert '</html>' in content, f'{f}: missing </html> tag'
+              assert '<script' in content, f'{f}: no scripts found — likely truncated'
+              print(f'✓ {f.split(\"/\")[-1]}')
+          "
+
       - name: JSON validation
         run: |
           python3 -m json.tool bridge/bots.json.example      > /dev/null && echo "✓ bots.json.example"
@@ -64,6 +77,66 @@ jobs:
           cd ~/claude-migration/memory-mcp
           npm install 2>&1
           echo "✓ npm install complete"
+
+      - name: Dashboard server smoke test
+        run: |
+          # Create mock agent structure for skills API to discover
+          mkdir -p /tmp/obs-ci/claude-agents/test-agent/.claude/commands
+          echo "# Test Skill\nA test slash command." > /tmp/obs-ci/claude-agents/test-agent/.claude/commands/test-skill.md
+
+          mkdir -p /tmp/obs-ci/global-commands
+          echo "# Deploy\nGlobal deploy skill." > /tmp/obs-ci/global-commands/deploy.md
+
+          # Start server with test paths via env vars
+          WORKSHOP_AGENTS_DIR=/tmp/obs-ci/claude-agents \
+          WORKSHOP_COMMANDS_DIR=/tmp/obs-ci/global-commands \
+          WORKSHOP_BOTS_JSON=/tmp/obs-ci/bots.json \
+          node ~/claude-agents/workshop/workshop-server.js &
+          SERVER_PID=$!
+
+          # Write a minimal bots.json so readBotsMap() doesn't fail
+          echo '{"bots":[{"name":"test-agent","agentDir":"/tmp/obs-ci/claude-agents/test-agent"}]}' \
+            > /tmp/obs-ci/bots.json
+
+          # Wait for server to be ready (up to 10s)
+          for i in $(seq 1 10); do
+            curl -sf http://localhost:3500/ > /dev/null 2>&1 && break
+            sleep 1
+          done
+
+          echo "--- GET / ---"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3500/)
+          [ "$STATUS" = "200" ] && echo "✓ GET / → 200" || (echo "✗ GET / → $STATUS" && kill $SERVER_PID && exit 1)
+
+          echo "--- GET /api/agents ---"
+          AGENTS=$(curl -sf http://localhost:3500/api/agents)
+          echo "$AGENTS" | python3 -m json.tool > /dev/null && echo "✓ /api/agents returns valid JSON" || (echo "✗ /api/agents invalid JSON" && kill $SERVER_PID && exit 1)
+
+          echo "--- GET /api/skills ---"
+          SKILLS=$(curl -sf http://localhost:3500/api/skills)
+          echo "$SKILLS" | python3 -m json.tool > /dev/null && echo "✓ /api/skills returns valid JSON" || (echo "✗ /api/skills invalid JSON" && kill $SERVER_PID && exit 1)
+
+          # Verify skills response shape: must have 'global' array and 'agents' array
+          python3 -c "
+          import json, sys
+          data = json.loads('''$SKILLS''')
+          assert 'global' in data, 'missing global key'
+          assert 'agents' in data, 'missing agents key'
+          assert isinstance(data['global'], list), 'global must be array'
+          assert isinstance(data['agents'], list), 'agents must be array'
+          print('✓ /api/skills shape valid')
+          " || (kill $SERVER_PID && exit 1)
+
+          echo "--- GET /api/agents/test-agent/skills ---"
+          AGENT_SKILLS=$(curl -sf http://localhost:3500/api/agents/test-agent/skills)
+          echo "$AGENT_SKILLS" | python3 -m json.tool > /dev/null && echo "✓ /api/agents/:name/skills returns valid JSON" || (echo "✗ agent skills invalid JSON" && kill $SERVER_PID && exit 1)
+
+          echo "--- GET /api/agents/test-agent/files ---"
+          FILES=$(curl -sf http://localhost:3500/api/agents/test-agent/files)
+          echo "$FILES" | python3 -m json.tool > /dev/null && echo "✓ /api/agents/:name/files returns valid JSON" || (echo "✗ files endpoint invalid JSON" && kill $SERVER_PID && exit 1)
+
+          kill $SERVER_PID
+          echo "✓ Server smoke test complete"
 
       - name: Indexer schema smoke test
         run: |
@@ -87,7 +160,6 @@ jobs:
       - name: MCP SDK import check
         run: |
           # Verify McpServer module exists in the installed SDK
-          # (timeout not available on macOS without GNU coreutils — use fs check instead)
           ls ~/claude-migration/memory-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js \
             && echo "✓ MCP SDK mcp.js module present" \
             || (echo "FAIL: mcp.js missing — SDK version may not include McpServer" && exit 1)
