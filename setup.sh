@@ -182,6 +182,14 @@ else
     warn "agents/commandant/CLAUDE.md not found in package — skipping"
 fi
 
+# Protocols
+if [ -d "$SCRIPT_DIR/agents/protocols" ]; then
+    cp -r "$SCRIPT_DIR/agents/protocols/." ~/claude-agents/main/protocols/
+    ok "agents/protocols/ → ~/claude-agents/main/protocols/"
+else
+    warn "agents/protocols/ not found in package — skipping"
+fi
+
 # Global preferences example
 if [ -f "$SCRIPT_DIR/dotclaude/CLAUDE.md.example" ]; then
     cp "$SCRIPT_DIR/dotclaude/CLAUDE.md.example" ~/.claude/CLAUDE.md.example
@@ -358,7 +366,7 @@ cat <<'NEXTSTEPS'
 
 5. CONFIGURE MEMORY MCP
    → MCP config was written to ~/.claude/.mcp.json by setup.sh. If VEC_DYLIB was found, you're done.
-   → If not, edit that file and set MEMORY_VEC_DYLIB manually.
+   → If not, edit that file and set VEC_DYLIB manually.
 
 6. INDEX YOUR MEMORY FILES
    → After writing memory notes, run: node ~/claude-migration/memory-mcp/indexer.mjs main

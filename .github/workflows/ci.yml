@@ -87,6 +87,10 @@ jobs:
           mkdir -p /tmp/obs-ci/global-commands
           echo "# Deploy\nGlobal deploy skill." > /tmp/obs-ci/global-commands/deploy.md
 
+          # Initialize jobs.json for tasks API
+          mkdir -p ~/.workshop
+          echo '{"tasks":[],"archived":[]}' > ~/.workshop/jobs.json
+
           # Start server with test paths via env vars
           WORKSHOP_AGENTS_DIR=/tmp/obs-ci/claude-agents \
           WORKSHOP_COMMANDS_DIR=/tmp/obs-ci/global-commands \
@@ -134,6 +138,18 @@ jobs:
           echo "--- GET /api/agents/test-agent/files ---"
           FILES=$(curl -sf http://localhost:3500/api/agents/test-agent/files)
           echo "$FILES" | python3 -m json.tool > /dev/null && echo "✓ /api/agents/:name/files returns valid JSON" || (echo "✗ files endpoint invalid JSON" && kill $SERVER_PID && exit 1)
+
+          # Tasks API — POST a job, GET list, PATCH complete, GET archived
+          echo '{"title":"CI Test Task","detail":"automated test","project":"ci","priority":"low","type":"manual","createdBy":"ci-runner"}' > /tmp/job-payload.json
+          JOB_RESP=$(curl -sf -X POST http://localhost:3500/api/jobs -H 'Content-Type: application/json' -d @/tmp/job-payload.json) || (echo "✗ POST /api/jobs failed" && exit 1)
+          echo "✓ POST /api/jobs"
+          JOB_ID=$(echo "$JOB_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+          curl -sf http://localhost:3500/api/jobs | python3 -c "import json,sys; d=json.load(sys.stdin); assert isinstance(d,list), 'not a list'" || (echo "✗ GET /api/jobs failed" && exit 1)
+          echo "✓ GET /api/jobs"
+          curl -sf -X PATCH http://localhost:3500/api/jobs/$JOB_ID -H 'Content-Type: application/json' -d '{"status":"completed","response":"looks good"}' || (echo "✗ PATCH /api/jobs/:id failed" && exit 1)
+          echo "✓ PATCH /api/jobs/:id"
+          curl -sf http://localhost:3500/api/jobs/archived | python3 -c "import json,sys; d=json.load(sys.stdin); assert isinstance(d,list) and len(d)>=1, 'archived empty'" || (echo "✗ GET /api/jobs/archived failed" && exit 1)
+          echo "✓ GET /api/jobs/archived"
 
           kill $SERVER_PID
           echo "✓ Server smoke test complete"

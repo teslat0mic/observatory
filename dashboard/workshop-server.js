@@ -3,6 +3,7 @@
 // Serves workshop.html, file editing API, proxies chat to bridge :3460
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { execSync, exec } = require('child_process');
@@ -65,7 +66,7 @@ function jsonRes(res, status, body) {
   const data = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': `http://localhost:${PORT}`,
     'Access-Control-Allow-Methods': 'GET, PUT, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
@@ -75,7 +76,15 @@ function jsonRes(res, status, body) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', c => chunks.push(c));
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > 5 * 1024 * 1024) {
+        req.destroy();
+        return reject(Object.assign(new Error('Request body too large'), { code: 'BODY_TOO_LARGE' }));
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString()));
     req.on('error', reject);
   });
@@ -101,10 +110,7 @@ function saveJobs(data) {
 }
 
 function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
+  return crypto.randomUUID();
 }
 
 function pushover(title, message, url) {
@@ -132,6 +138,10 @@ function routeToAgent(task) {
   const parts = task.sessionKey.split(':');
   const agentName = parts[0];
   if (!agentName) return;
+  if (!/^[a-zA-Z0-9_-]+$/.test(agentName)) {
+    console.warn(`[jobs] routeToAgent: invalid agentName in sessionKey: ${agentName}`);
+    return;
+  }
 
   let message = task.resumptionTemplate
     .replace(/\{\{response\}\}/g, task.response)
@@ -354,7 +364,7 @@ function proxyToBridge(method, bridgePath, reqBody, res, isSSE = false) {
 
   const proxyReq = http.request(options, (proxyRes) => {
     const headers = {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': `http://localhost:${PORT}`,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
@@ -507,7 +517,7 @@ async function handleRequest(req, res) {
   // CORS preflight
   if (method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': `http://localhost:${PORT}`,
       'Access-Control-Allow-Methods': 'GET, PUT, POST, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     });
@@ -601,7 +611,7 @@ async function handleRequest(req, res) {
       const content = fs.readFileSync(filePath, 'utf8');
       res.writeHead(200, {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': `http://localhost:${PORT}`,
       });
       return res.end(content);
     } catch (e) {
@@ -621,6 +631,7 @@ async function handleRequest(req, res) {
       log(`File saved: ${filePath} (${body.length} bytes)`);
       return jsonRes(res, 200, { ok: true, size: body.length });
     } catch (e) {
+      if (e.code === 'BODY_TOO_LARGE') return jsonRes(res, 413, { error: 'Request body too large' });
       return jsonRes(res, 500, { error: e.message });
     }
   }
@@ -630,7 +641,11 @@ async function handleRequest(req, res) {
   // POST /api/chat/{agent} — SSE stream proxy
   const chatMatch = p.match(/^\/api\/chat\/([a-zA-Z0-9_.-]+)$/);
   if (chatMatch && method === 'POST') {
-    const body = await readBody(req);
+    let body;
+    try { body = await readBody(req); } catch (e) {
+      if (e.code === 'BODY_TOO_LARGE') return jsonRes(res, 413, { error: 'Request body too large' });
+      return jsonRes(res, 500, { error: e.message });
+    }
     proxyToBridge('POST', `/api/chat/${chatMatch[1]}`, body, res, true);
     return;
   }
@@ -765,7 +780,10 @@ async function handleRequest(req, res) {
   // POST /api/jobs — create a task
   if (p === '/api/jobs' && method === 'POST') {
     let body;
-    try { body = JSON.parse(await readBody(req)); } catch { return jsonRes(res, 400, { error: 'Invalid JSON' }); }
+    try { body = JSON.parse(await readBody(req)); } catch (e) {
+      if (e.code === 'BODY_TOO_LARGE') return jsonRes(res, 413, { error: 'Request body too large' });
+      return jsonRes(res, 400, { error: 'Invalid JSON' });
+    }
 
     if (!body.title) return jsonRes(res, 400, { error: 'title is required' });
     const validPriorities = ['high', 'medium', 'low'];
@@ -815,7 +833,15 @@ async function handleRequest(req, res) {
   if (jobIdMatch && method === 'PATCH') {
     const id = jobIdMatch[1];
     let body;
-    try { body = JSON.parse(await readBody(req)); } catch { return jsonRes(res, 400, { error: 'Invalid JSON' }); }
+    try { body = JSON.parse(await readBody(req)); } catch (e) {
+      if (e.code === 'BODY_TOO_LARGE') return jsonRes(res, 413, { error: 'Request body too large' });
+      return jsonRes(res, 400, { error: 'Invalid JSON' });
+    }
+
+    const VALID_STATUSES = ['pending', 'in_progress', 'completed'];
+    if (body.status && !VALID_STATUSES.includes(body.status)) {
+      return jsonRes(res, 400, { error: 'Invalid status value' });
+    }
 
     const data = loadJobs();
     if (!data.tasks) data.tasks = [];
@@ -891,6 +917,6 @@ async function handleRequest(req, res) {
 }
 
 const server = http.createServer(handleRequest);
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   log(`Workshop server running on http://localhost:${PORT}`);
 });

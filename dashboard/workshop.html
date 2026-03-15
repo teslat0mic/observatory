@@ -920,7 +920,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
       </div>
     </div>
 
-    <!-- Iframe panel for embedded services (PTD etc.) -->
+    <!-- Iframe panel for embedded services -->
     <div class="iframe-panel" id="iframePanel">
       <iframe id="serviceFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
     </div>
@@ -953,7 +953,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div class="task-form-row">
       <div>
         <label>Project</label>
-        <input type="text" id="taskFormProject" placeholder="e.g. charis">
+        <input type="text" id="taskFormProject" placeholder="e.g. my-project">
       </div>
       <div>
         <label>Created By</label>
@@ -985,25 +985,28 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 </div>
 
 <script>
-// --- Config ---
+// ── USER CONFIGURATION ─────────────────────────────────────────────────────
+// Group your agents into sidebar categories. Agents are discovered dynamically
+// from ~/claude-agents/ — these groups control how they're displayed.
+// Add your agent names here after running setup.sh and creating your agents.
 const AGENT_GROUPS = [
-  { id: 'primary', label: 'Primary Contacts', defaultOpen: true,
-    agents: ['main', 'thimble', 'sterling', 'aegis', 'wrangler'] },
-  { id: 'pms', label: 'Project Managers', defaultOpen: true,
-    agents: ['charis', 'createbook-pm', 'dbeatz', 'echos', 'fathom', 'joshuassoul', 'latasha', 'personaplex', 'plates', 'praxis', 'solarknight', 'sous', 'artscout-pm'] },
+  { id: 'commandants', label: 'Commandants', defaultOpen: true,
+    agents: ['main'] },
+  { id: 'pms', label: 'Project PMs', defaultOpen: true,
+    agents: ['pm-example'] },
   { id: 'specialists', label: 'Specialists', defaultOpen: false,
-    agents: ['artist', 'chrysalis', 'emulator-tester', 'paramedic', 'pentest', 'record-keeper', 'researcher', 'runpod-specialist'] },
-  { id: 'personas', label: 'Personas', defaultOpen: false,
-    agents: ['munger', 'torvalds', 'taleb', 'hormozi', 'graham', 'feynman', 'ogilvy', 'naval', 'rams', 'herzog', 'patrick-clone'] },
-  { id: 'local-models', label: 'Local Models', defaultOpen: false,
-    agents: ['qwen-coder', 'qwen-coder30b', 'qwen35', 'qwen3.5'] },
+    agents: ['specialist-example'] },
 ];
+// ───────────────────────────────────────────────────────────────────────────
 
+// ── USER CONFIGURATION ─────────────────────────────────────────────────────
+// Add iframe-embedded services here. Each entry gets a tab in the sidebar.
+// Set mode: 'iframe' to embed in the dashboard, or 'link' to open externally.
 const SERVICES = [
-  { id: 'ptd', label: 'PTD', port: 3333, mode: 'iframe' },
   { id: 'command-center', label: 'Command Center', url: '/command-center.html', mode: 'iframe' },
-  { id: 'aegis', label: 'Aegis Portal', port: 3334, mode: 'link' },
+  // Example: { id: 'my-tool', label: 'My Tool', port: 9000, mode: 'iframe' },
 ];
+// ───────────────────────────────────────────────────────────────────────────
 
 // --- State ---
 let currentAgent = null;

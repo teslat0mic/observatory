@@ -42,12 +42,12 @@ curl -X POST http://localhost:3500/api/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Approve deploy to production",
-    "detail": "I have finished the checkout fix. Ready to deploy charis to production. Check the diff at /tmp/deploy-diff.txt before approving.",
-    "project": "charis",
+    "detail": "I have finished the checkout fix. Ready to deploy my-project to production. Check the diff at /tmp/deploy-diff.txt before approving.",
+    "project": "my-project",
     "priority": "high",
     "type": "approval",
-    "createdBy": "charis-pm",
-    "sessionKey": "charis:abc123:sess456",
+    "createdBy": "pm-agent",
+    "sessionKey": "pm-agent:abc123:sess456",
     "resumptionTemplate": "Human approved deploy. Response: {{response}}. Proceed with deployment now."
   }'
 ```

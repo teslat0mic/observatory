@@ -61,7 +61,7 @@ memory-mcp/server.mjs          # MCP server: searchable memory via sqlite-vec + 
 ```
 
 - **`telegram-bridge.py`** — polls up to N Telegram bots concurrently. Routes each message to the right agent directory. Messages to the same agent queue sequentially. Also serves an HTTP API on `:3460` that the dashboard uses.
-- **`workshop-server.js`** — web dashboard on `:3500`. Chat interface, agent status, file browser. Proxies agent calls through the bridge.
+- **`workshop-server.js`** — web dashboard on `:3500`. Chat interface, agent status, file browser, and a Tasks tab for reviewing and approving agent-submitted tasks (API at `/api/jobs`). Proxies agent calls through the bridge.
 - **`memory-mcp/server.mjs`** — MCP server that gives agents two tools: `memory_search` and `memory_agents`. Indexes Markdown notes into SQLite with vector embeddings (Ollama, fully local).
 - **Each agent** = a directory under `~/claude-agents/{name}/` containing a `CLAUDE.md` (identity + instructions) and a `memory/` folder (daily notes + long-term memory file).
 
@@ -84,15 +84,25 @@ Copy the relevant template into `~/claude-agents/{yourname}/` and fill in the `C
 
 **`bots.json`** — maps Telegram bot tokens to agent directories:
 ```json
-[
-  {
-    "name": "myagent",
-    "tokenFile": "~/.workshop/tokens/myagent.token",
-    "agentDir": "~/claude-agents/myagent"
-  }
-]
+{
+  "allowedUsers": ["YOUR_TELEGRAM_USER_ID"],
+  "model": "claude-sonnet-4-6",
+  "bots": [
+    {
+      "name": "myagent",
+      "tokenFile": "/Users/YOUR_USERNAME/.workshop/secrets/myagent.token",
+      "agentDir": "/Users/YOUR_USERNAME/claude-agents/myagent/"
+    },
+    {
+      "name": "advisor",
+      "displayName": "Example Advisor · Dashboard only",
+      "dashboardOnly": true,
+      "agentDir": "/Users/YOUR_USERNAME/claude-agents/advisor/"
+    }
+  ]
+}
 ```
-Agents without a `tokenFile` are dashboard-only (no Telegram polling).
+Set `dashboardOnly: true` for agents that should appear in the dashboard without a Telegram bot. Agents with this flag skip token loading and Telegram polling.
 
 **`WORKSHOP_AGENTS_DIR`** — env var to override the default `~/claude-agents/` root.
 

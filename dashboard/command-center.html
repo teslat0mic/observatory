@@ -680,8 +680,8 @@
     <div class="hud-bottom">
 
       <div class="status-panel" data-augmented-ui="tl-clip br-clip border">
-        <div class="panel-label">◈ TASK QUEUE (PTD)</div>
-        <div id="ptd-content">
+        <div class="panel-label">◈ TASK QUEUE</div>
+        <div id="tasks-content">
           <div class="stat-row"><span class="label">Loading...</span></div>
         </div>
       </div>
@@ -755,7 +755,7 @@
 const WORKSHOP_API    = 'http://localhost:3500/api/agents';
 const BRIDGE_AGENTS   = 'http://localhost:3460/api/agents';
 const BRIDGE_HEALTH   = 'http://localhost:3460/api/health';
-const PTD_API         = 'http://localhost:3333/api/tasks';
+const TASKS_API       = 'http://localhost:3333/api/tasks';
 const PROTOCOLS_API   = 'http://localhost:3500/api/protocols';
 const CRONS_API       = 'http://localhost:3500/api/crons';
 const SKILLS_API      = 'http://localhost:3500/api/skills';
@@ -821,26 +821,19 @@ function agentState(agent) {
   return 'dormant';
 }
 
+// ── USER CONFIGURATION ─────────────────────────────────────────────────────
+// Map agent names to short display initials shown in the timeline.
+// Add entries for your own agents here.
+const agentInitialsMap = {
+  main:               'WS',
+  // 'pm-example':    'PM',
+  // 'specialist':    'SP',
+};
+// ───────────────────────────────────────────────────────────────────────────
+
 // Map agent name → 2-char portrait abbreviation
 function agentInitials(name) {
-  const map = {
-    main: 'P🩹', patch: 'P🩹',
-    charis: 'CH', sterling: 'ST', aegis: 'AE',
-    paramedic: 'RX', artist: 'AR', plates: 'PL',
-    praxis: 'PR', sous: 'SG', solarknight: 'SK',
-    echos: 'EC', dbeatz: 'DB', chrysalis: 'CR',
-    personaplex: 'PP', 'patrick-clone': 'PC',
-    'emulator-tester': 'ET', 'record-keeper': 'RK',
-    workshop: 'WS', 'local-llm': 'LL',
-    'runpod-specialist': 'RP', runpod: 'RD',
-    researcher: 'RS', pentest: 'PT',
-    'artscout-pm': 'AS', 'createbook-pm': 'CB',
-    joshuassoul: 'JS', munger: 'MU',
-    torvalds: 'LT', taleb: 'NT', hormozi: 'AH',
-    graham: 'PG', feynman: 'RF', ogilvy: 'DO',
-    naval: 'NR', rams: 'DR', herzog: 'WH',
-  };
-  return map[name] || name.slice(0, 2).toUpperCase();
+  return agentInitialsMap[name] || name.slice(0, 2).toUpperCase();
 }
 
 // Portrait color based on state
@@ -951,10 +944,10 @@ function renderBridgeHealth(h) {
   `;
 }
 
-// ─── RENDER: PTD TASKS ───────────────────────────────────────────
+// ─── RENDER: TASKS ───────────────────────────────────────────────
 function renderTasks(tasks) {
   if (!tasks || !Array.isArray(tasks)) {
-    document.getElementById('ptd-content').innerHTML = '<div class="offline-msg">PTD OFFLINE</div>';
+    document.getElementById('tasks-content').innerHTML = '<div class="offline-msg">TASKS OFFLINE</div>';
     document.getElementById('pill-tasks').textContent = 'TASKS: —';
     return;
   }
@@ -968,7 +961,7 @@ function renderTasks(tasks) {
   document.getElementById('pill-tasks').textContent = `TASKS: ${total}`;
   document.getElementById('pill-tasks').className = 'pill ' + (total > 0 ? 'warning' : 'info');
 
-  document.getElementById('ptd-content').innerHTML = `
+  document.getElementById('tasks-content').innerHTML = `
     <div class="stat-row"><span class="label">Total pending</span><span class="value ${total > 0 ? 'amber' : 'green'}">${total}</span></div>
     <div class="stat-row"><span class="label">Outreach drafts</span><span class="value purple">${outreach}</span></div>
     <div class="stat-row"><span class="label">Manual tasks</span><span class="value cyan">${manual}</span></div>
@@ -1027,20 +1020,14 @@ function renderSkills(data) {
 }
 
 // ─── RENDER: 24H SCHEDULE TIMELINE ──────────────────────────────
+// ── USER CONFIGURATION ─────────────────────────────────────────────────────
+// Abbreviations for scheduled job names shown in the timeline view.
+// Keys are launchd label suffixes (com.workshop.<key>), values are short labels.
 const TL_ABBR = {
-  'accountant':            'ACT',
-  'aegis-session1':        'AE1',
-  'aegis-session2':        'AE2',
-  'aegis-session3':        'AE3',
-  'weekly-self-review':    'WSR',
-  'gauntlet-daily':        'GAU',
-  'paramedic-daily':       'MED',
-  'lantern':               'LNT',
-  'sterling-daily-drafts': 'STD',
-  'sterling-fetch-replies':'SF·',
-  'sterling-reply-triage': 'ST·',
-  'aegis-mandate-audit':   'AMA',
+  // 'my-daily-job':  'Daily',
+  // 'my-sync':       'Sync',
 };
+// ───────────────────────────────────────────────────────────────────────────
 
 function cronDotClass(c) {
   if (c.running && !c.keepAlive) return 'active';
@@ -1217,7 +1204,7 @@ async function fetchAll() {
     fetchJSON(WORKSHOP_API),
     fetchJSON(BRIDGE_AGENTS),
     fetchJSON(BRIDGE_HEALTH),
-    fetchJSON(PTD_API),
+    fetchJSON(TASKS_API),
     fetchJSON(PROTOCOLS_API),
     fetchJSON(CRONS_API),
     fetchJSON(SKILLS_API),
